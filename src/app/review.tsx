@@ -378,23 +378,13 @@ export default function ReviewScreen() {
             </Text>
 
             <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Anlam</Text>
+              <Text style={styles.resultLabel}>Meaning</Text>
               <Text style={styles.resultText}>{question.meaning}</Text>
             </View>
 
             <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Basit anlam</Text>
-              <Text style={styles.resultText}>{question.simpleMeaning}</Text>
-            </View>
-
-            <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Örnek cümle</Text>
+              <Text style={styles.resultLabel}>Example</Text>
               <Text style={styles.resultText}>{question.example}</Text>
-            </View>
-
-            <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Türkçe çeviri</Text>
-              <Text style={styles.resultText}>{question.exampleTr}</Text>
             </View>
 
             <Pressable style={styles.button} onPress={goToNextQuestion}>
