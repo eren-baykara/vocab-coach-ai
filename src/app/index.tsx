@@ -16,6 +16,7 @@ import { supabase } from "../lib/supabase";
 
 type WordContent = {
   display_word: string | null;
+  normalized_word: string | null;
   simple_definition: string | null;
   turkish_meaning: string | null;
   mini_lesson: string | null;
@@ -138,6 +139,7 @@ export default function HomeScreen() {
         next_review_at,
         word_contents (
           display_word,
+          normalized_word,
           simple_definition,
           turkish_meaning,
           mini_lesson
@@ -321,7 +323,7 @@ export default function HomeScreen() {
 
     Alert.alert(
       "Delete set?",
-      `This will delete the "${selectedSet.name}" set. Your words will stay in All words.`,
+      `This will delete the "${selectedSet.name}" set. Your words will stay in Library.`,
       [
         {
           text: "Cancel",
@@ -358,7 +360,7 @@ export default function HomeScreen() {
 
     Alert.alert(
       "Remove from set?",
-      `Remove "${getDisplayWord(item)}" from "${selectedSet.name}"? The word will stay in All words.`,
+      `Remove "${getDisplayWord(item)}" from "${selectedSet.name}"? The word will stay in Library.`,
       [
         {
           text: "Cancel",
@@ -411,38 +413,74 @@ export default function HomeScreen() {
     }
 
     if (selectedSetId) {
-      const { data: latestWord, error: latestWordError } = await supabase
-        .from("user_words")
-        .select("id")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const targetWord = await findUserWordByInput(cleanWord);
 
-      if (latestWordError) {
+      if (!targetWord) {
         setAddingWord(false);
-        Alert.alert("Word added, but could not add it to set", latestWordError.message);
+        Alert.alert(
+          "Word added",
+          "The word was added to your library, but I could not find it to attach it to this set."
+        );
+        await refreshAll();
         return;
       }
 
-      if (latestWord) {
-        const { error: setError } = await supabase
-          .from("word_set_items")
-          .insert({
-            set_id: selectedSetId,
-            user_word_id: latestWord.id,
-          });
+      const { error: setError } = await supabase
+        .from("word_set_items")
+        .insert({
+          set_id: selectedSetId,
+          user_word_id: targetWord.id,
+        });
 
-        if (setError && setError.code !== "23505") {
-          setAddingWord(false);
-          Alert.alert("Word added, but could not add it to set", setError.message);
-          return;
-        }
+      if (setError && setError.code !== "23505") {
+        setAddingWord(false);
+        Alert.alert("Word added, but could not add it to set", setError.message);
+        return;
       }
     }
 
     setAddingWord(false);
     setWord("");
     await refreshAll();
+  }
+
+  async function findUserWordByInput(inputWord: string) {
+    const normalizedInput = inputWord.trim().toLowerCase();
+
+    const { data, error } = await supabase
+      .from("user_words")
+      .select(
+        `
+        id,
+        created_at,
+        word_contents (
+          display_word,
+          normalized_word
+        )
+      `
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      Alert.alert("Could not find word", error.message);
+      return null;
+    }
+
+    const typedWords = (data ?? []) as Pick<
+      UserWord,
+      "id" | "created_at" | "word_contents"
+    >[];
+
+    return (
+      typedWords.find((item) => {
+        const content = getContent(item as UserWord);
+
+        const displayWord = content?.display_word?.trim().toLowerCase();
+        const normalizedWord = content?.normalized_word?.trim().toLowerCase();
+
+        return displayWord === normalizedInput || normalizedWord === normalizedInput;
+      }) ?? null
+    );
   }
 
   function getContent(item: UserWord) {
@@ -628,7 +666,7 @@ export default function HomeScreen() {
                 selectedSetId === null && styles.activeSetChipTitle,
               ]}
             >
-              All words
+              Library
             </Text>
             <Text
               style={[
@@ -636,7 +674,7 @@ export default function HomeScreen() {
                 selectedSetId === null && styles.activeSetChipMeta,
               ]}
             >
-              {words.length} words
+              all saved words
             </Text>
           </Pressable>
 
@@ -721,11 +759,11 @@ export default function HomeScreen() {
 
       <View style={styles.practiceCard}>
         <Text style={styles.practiceEyebrow}>
-          {selectedSet ? selectedSet.name : "All words"}
+          {selectedSet ? selectedSet.name : "Library"}
         </Text>
         <Text style={styles.practiceTitle}>Practice modes</Text>
         <Text style={styles.practiceText}>
-          Practice {selectedSet ? "this set" : "your whole vocabulary"} with
+          Practice {selectedSet ? "this set" : "your library"} with
           focused quiz modes.
         </Text>
 
@@ -802,7 +840,7 @@ export default function HomeScreen() {
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{visibleWords.length}</Text>
           <Text style={styles.statLabel}>
-            {selectedSet ? "Set words" : "Total words"}
+            {selectedSet ? "Set words" : "Library words"}
           </Text>
         </View>
 
@@ -819,7 +857,7 @@ export default function HomeScreen() {
         <Text style={styles.helperText}>
           {selectedSet
             ? `New words will be added to the "${selectedSet.name}" set.`
-            : "Select a set above if you want the word to go into a specific set."}
+            : "Choose a set above to add the word there. Otherwise it goes only to Library."}
         </Text>
 
         <TextInput
@@ -864,7 +902,7 @@ export default function HomeScreen() {
       <View style={styles.card}>
         <View style={styles.wordsHeader}>
           <Text style={styles.sectionTitle}>
-            {selectedSet ? selectedSet.name : "Your vocabulary"}
+            {selectedSet ? selectedSet.name : "Library"}
           </Text>
 
           <Pressable onPress={refreshAll} disabled={wordsLoading || setsLoading}>
@@ -887,7 +925,7 @@ export default function HomeScreen() {
             <Text style={styles.emptyStateText}>
               {selectedSet
                 ? "Add a word while this set is selected."
-                : "Create a set like TOEFL, then add your first word."}
+                : "Create a set like TOEFL, or add a word directly to your Library."}
             </Text>
           </View>
         ) : (
