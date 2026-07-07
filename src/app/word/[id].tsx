@@ -76,6 +76,7 @@ export default function WordDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [generatingAi, setGeneratingAi] = useState(false);
 
   const [wordDetail, setWordDetail] = useState<UserWordDetail | null>(null);
   const [personalNote, setPersonalNote] = useState("");
@@ -116,6 +117,15 @@ export default function WordDetailScreen() {
       : wordDetail.word_contents;
   }
 
+  function hasAiContent(content: WordContent) {
+    return Boolean(
+      content.simple_definition ||
+        content.academic_definition ||
+        content.turkish_meaning ||
+        content.mini_lesson
+    );
+  }
+
   function renderTextValue(value: string | number | null | undefined) {
     if (value === null || value === undefined || value === "") {
       return "Not generated yet";
@@ -132,6 +142,72 @@ export default function WordDetailScreen() {
     return value.join(", ");
   }
 
+  async function generateAiLesson() {
+    if (!id || !wordDetail) return;
+
+    setGeneratingAi(true);
+
+    const { data, error } = await supabase.functions.invoke(
+      "generate-word-content",
+      {
+        body: {
+          user_word_id: id,
+        },
+      }
+    );
+
+    setGeneratingAi(false);
+
+    if (error) {
+      const detailedMessage = await getFunctionErrorMessage(error);
+
+      Alert.alert("Could not generate AI lesson", detailedMessage);
+      return;
+    }
+
+    await loadWordDetail();
+
+    if (data?.cached) {
+      Alert.alert("Already generated", "This word already has AI content.");
+      return;
+    }
+
+    Alert.alert("AI lesson ready", "Your word content has been generated.");
+  }
+  async function getFunctionErrorMessage(error: unknown) {
+    const fallbackMessage =
+      error instanceof Error ? error.message : "Unknown function error";
+
+    const maybeError = error as {
+      context?: Response;
+    };
+
+    if (!maybeError.context) {
+      return fallbackMessage;
+    }
+
+    try {
+      const responseText = await maybeError.context.text();
+
+      if (!responseText) {
+        return fallbackMessage;
+      }
+
+      try {
+        const parsed = JSON.parse(responseText);
+
+        if (parsed?.error) {
+          return String(parsed.error);
+        }
+
+        return responseText;
+      } catch {
+        return responseText;
+      }
+    } catch {
+      return fallbackMessage;
+    }
+  }
   async function updateWordStatus(newStatus: WordStatus) {
     if (!id || !wordDetail) return;
 
@@ -225,6 +301,7 @@ export default function WordDetailScreen() {
   const content = getContent();
   const title = content?.display_word ?? "Word detail";
   const currentStatus = (wordDetail?.status ?? "new") as WordStatus;
+  const aiReady = content ? hasAiContent(content) : false;
 
   if (loading) {
     return (
@@ -263,6 +340,33 @@ export default function WordDetailScreen() {
       <View style={styles.heroCard}>
         <Text style={styles.wordTitle}>{content.display_word}</Text>
         <Text style={styles.wordMeta}>Status: {currentStatus}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>AI lesson</Text>
+
+        <Text style={styles.helperText}>
+          Generate definitions, examples, Turkish meaning, collocations, common
+          mistakes, and a mini lesson for this word.
+        </Text>
+
+        {aiReady ? (
+          <Text style={styles.successText}>AI content is ready.</Text>
+        ) : (
+          <Text style={styles.warningText}>
+            AI content has not been generated yet.
+          </Text>
+        )}
+
+        <Pressable
+          style={[styles.button, generatingAi && styles.disabledButton]}
+          onPress={generateAiLesson}
+          disabled={generatingAi}
+        >
+          <Text style={styles.buttonText}>
+            {generatingAi ? "Generating..." : "Generate AI lesson"}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.card}>
@@ -524,6 +628,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#64748b",
     lineHeight: 22,
+    marginBottom: 12,
+  },
+  successText: {
+    fontSize: 15,
+    color: "#166534",
+    backgroundColor: "#dcfce7",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  warningText: {
+    fontSize: 15,
+    color: "#92400e",
+    backgroundColor: "#fef3c7",
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 12,
   },
   statusActions: {
