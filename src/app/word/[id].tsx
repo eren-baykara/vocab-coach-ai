@@ -22,7 +22,14 @@ type WordContent = {
   academic_definition: string | null;
   turkish_meaning: string | null;
   toefl_example: string | null;
+  toefl_example_tr: string | null;
   daily_life_example: string | null;
+  daily_life_example_tr: string | null;
+  fill_blank_sentence: string | null;
+  fill_blank_sentence_tr: string | null;
+  fill_blank_answer: string | null;
+  meaning_distractors: string[] | null;
+  word_distractors: string[] | null;
   synonyms: string[] | null;
   antonyms: string[] | null;
   collocations: string[] | null;
@@ -70,7 +77,14 @@ const WORD_DETAIL_SELECT = `
     academic_definition,
     turkish_meaning,
     toefl_example,
+    toefl_example_tr,
     daily_life_example,
+    daily_life_example_tr,
+    fill_blank_sentence,
+    fill_blank_sentence_tr,
+    fill_blank_answer,
+    meaning_distractors,
+    word_distractors,
     synonyms,
     antonyms,
     collocations,
@@ -198,7 +212,14 @@ export default function WordDetailScreen() {
     );
   }
 
-  function formatReviewDate(value: string | null) {
+  function getExampleTr(content: WordContent) {
+    return (
+      content.daily_life_example_tr ||
+      content.toefl_example_tr ||
+      "Türkçe çeviri henüz oluşturulmadı."
+    );
+  }
+function formatReviewDate(value: string | null) {
     if (!value) return "Henüz planlanmadı";
 
     const date = new Date(value);
@@ -513,7 +534,12 @@ export default function WordDetailScreen() {
           <Text style={styles.simpleLabel}>Örnek cümle</Text>
           <Text style={styles.simpleText}>{getExample(content)}</Text>
         </View>
-      </View>
+
+        <View style={styles.simpleBlock}>
+          <Text style={styles.simpleLabel}>Türkçe çeviri</Text>
+          <Text style={styles.simpleText}>{getExampleTr(content)}</Text>
+        </View>
+</View>
 
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>

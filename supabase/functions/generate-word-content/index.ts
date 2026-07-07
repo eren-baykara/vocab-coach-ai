@@ -5,7 +5,14 @@ type GeneratedWordContent = {
   academic_definition: string;
   turkish_meaning: string;
   toefl_example: string;
+  toefl_example_tr: string;
   daily_life_example: string;
+  daily_life_example_tr: string;
+  fill_blank_sentence: string;
+  fill_blank_sentence_tr: string;
+  fill_blank_answer: string;
+  meaning_distractors: string[];
+  word_distractors: string[];
   synonyms: string[];
   antonyms: string[];
   collocations: string[];
@@ -22,6 +29,8 @@ type WordContentRecord = {
   normalized_word: string | null;
   simple_definition: string | null;
   mini_lesson: string | null;
+  daily_life_example_tr: string | null;
+  fill_blank_sentence: string | null;
 };
 
 type UserWordRecord = {
@@ -102,7 +111,9 @@ Deno.serve(async (req) => {
           display_word,
           normalized_word,
           simple_definition,
-          mini_lesson
+          mini_lesson,
+          daily_life_example_tr,
+          fill_blank_sentence
         )
       `
       )
@@ -131,14 +142,17 @@ Deno.serve(async (req) => {
     }
 
     const alreadyGenerated = Boolean(
-      content.simple_definition && content.mini_lesson
+      content.simple_definition &&
+        content.mini_lesson &&
+        content.daily_life_example_tr &&
+        content.fill_blank_sentence
     );
 
     if (alreadyGenerated) {
       return jsonResponse({
         ok: true,
         cached: true,
-        message: "AI content already exists.",
+        message: "AI practice content already exists.",
       });
     }
 
@@ -154,7 +168,14 @@ Deno.serve(async (req) => {
         academic_definition: cleanText(generatedContent.academic_definition),
         turkish_meaning: cleanText(generatedContent.turkish_meaning),
         toefl_example: cleanText(generatedContent.toefl_example),
+        toefl_example_tr: cleanText(generatedContent.toefl_example_tr),
         daily_life_example: cleanText(generatedContent.daily_life_example),
+        daily_life_example_tr: cleanText(generatedContent.daily_life_example_tr),
+        fill_blank_sentence: cleanText(generatedContent.fill_blank_sentence),
+        fill_blank_sentence_tr: cleanText(generatedContent.fill_blank_sentence_tr),
+        fill_blank_answer: cleanText(generatedContent.fill_blank_answer),
+        meaning_distractors: cleanStringArray(generatedContent.meaning_distractors),
+        word_distractors: cleanStringArray(generatedContent.word_distractors),
         synonyms: cleanStringArray(generatedContent.synonyms),
         antonyms: cleanStringArray(generatedContent.antonyms),
         collocations: cleanStringArray(generatedContent.collocations),
@@ -174,7 +195,7 @@ Deno.serve(async (req) => {
     return jsonResponse({
       ok: true,
       cached: false,
-      message: "AI content generated.",
+      message: "AI practice content generated.",
     });
   } catch (error) {
     const message =
@@ -225,17 +246,22 @@ async function generateWordContent({
         {
           role: "developer",
           content:
-            "You are an expert English vocabulary coach for TOEFL, IELTS, and GRE learners. Create accurate, practical, beginner-friendly learning content. Return only valid JSON that matches the schema.",
+            "You are an expert English vocabulary coach for Turkish-speaking TOEFL, IELTS, and GRE learners. Create accurate, practical, beginner-friendly learning and quiz content. Return only valid JSON that matches the schema.",
         },
         {
           role: "user",
-          content: `Create vocabulary learning content for this English word: "${word}".
+          content: `Create vocabulary learning and practice content for this English word: "${word}".
 
 Requirements:
 - Keep definitions clear and useful.
-- Turkish meaning should be natural Turkish.
+- Turkish meaning should be natural, short Turkish. Prefer 1-6 words when possible. Do not include English in parentheses.
 - TOEFL / IELTS example should be academic.
 - Daily life example should be natural spoken English.
+- Provide Turkish translations for both example sentences.
+- fill_blank_sentence must be a natural English sentence that uses the exact target word or phrase. It will be used only in practice screens, not in the word detail page. It will be used only in practice screens, not in the word detail page.
+- fill_blank_answer should be the exact target word or phrase to fill in the sentence.
+- meaning_distractors should be 4 short Turkish wrong meanings. Do not include English translations or parentheses.
+- word_distractors should be 4 English wrong answer choices. Return only words or short phrases, no explanations.
 - Common mistake should warn about a real usage problem.
 - Mini lesson should teach how to use the word, not just memorize it.
 - CEFR level should be one of: A1, A2, B1, B2, C1, C2.
@@ -255,7 +281,20 @@ Requirements:
               academic_definition: { type: "string" },
               turkish_meaning: { type: "string" },
               toefl_example: { type: "string" },
+              toefl_example_tr: { type: "string" },
               daily_life_example: { type: "string" },
+              daily_life_example_tr: { type: "string" },
+              fill_blank_sentence: { type: "string" },
+              fill_blank_sentence_tr: { type: "string" },
+              fill_blank_answer: { type: "string" },
+              meaning_distractors: {
+                type: "array",
+                items: { type: "string" },
+              },
+              word_distractors: {
+                type: "array",
+                items: { type: "string" },
+              },
               synonyms: {
                 type: "array",
                 items: { type: "string" },
@@ -286,7 +325,14 @@ Requirements:
               "academic_definition",
               "turkish_meaning",
               "toefl_example",
+              "toefl_example_tr",
               "daily_life_example",
+              "daily_life_example_tr",
+              "fill_blank_sentence",
+              "fill_blank_sentence_tr",
+              "fill_blank_answer",
+              "meaning_distractors",
+              "word_distractors",
               "synonyms",
               "antonyms",
               "collocations",

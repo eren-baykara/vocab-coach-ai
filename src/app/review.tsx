@@ -20,7 +20,14 @@ type WordContent = {
   simple_definition: string | null;
   turkish_meaning: string | null;
   toefl_example: string | null;
+  toefl_example_tr: string | null;
   daily_life_example: string | null;
+  daily_life_example_tr: string | null;
+  fill_blank_sentence: string | null;
+  fill_blank_sentence_tr: string | null;
+  fill_blank_answer: string | null;
+  meaning_distractors: string[] | null;
+  word_distractors: string[] | null;
   mini_lesson: string | null;
 };
 
@@ -46,6 +53,7 @@ type QuizQuestion = {
   meaning: string;
   simpleMeaning: string;
   example: string;
+  exampleTr: string;
   options: string[];
 };
 
@@ -66,6 +74,13 @@ const REVIEW_SELECT = `
     turkish_meaning,
     toefl_example,
     daily_life_example,
+    daily_life_example_tr,
+    toefl_example_tr,
+    fill_blank_sentence,
+    fill_blank_sentence_tr,
+    fill_blank_answer,
+    meaning_distractors,
+    word_distractors,
     mini_lesson
   )
 `;
@@ -377,6 +392,11 @@ export default function ReviewScreen() {
               <Text style={styles.resultText}>{question.example}</Text>
             </View>
 
+            <View style={styles.resultBlock}>
+              <Text style={styles.resultLabel}>Türkçe çeviri</Text>
+              <Text style={styles.resultText}>{question.exampleTr}</Text>
+            </View>
+
             <Pressable style={styles.button} onPress={goToNextQuestion}>
               <Text style={styles.buttonText}>Next question</Text>
             </Pressable>
@@ -440,6 +460,46 @@ function getExample(item: ReviewWord) {
   );
 }
 
+function getExampleTr(item: ReviewWord) {
+  const content = getContent(item);
+
+  return (
+    content?.daily_life_example_tr ||
+    content?.toefl_example_tr ||
+    "Türkçe çeviri henüz oluşturulmadı."
+  );
+}
+
+function getMeaningDistractors(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.meaning_distractors ?? [];
+}
+
+function getWordDistractors(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.word_distractors ?? [];
+}
+
+function getFillBlankSentence(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.fill_blank_sentence || getExample(item);
+}
+
+function getFillBlankSentenceTr(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.fill_blank_sentence_tr || getExampleTr(item);
+}
+
+function getFillBlankAnswer(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.fill_blank_answer || getWord(item);
+}
+
 function hasUsableContent(item: ReviewWord, mode: PracticeMode) {
   const content = getContent(item);
 
@@ -448,7 +508,11 @@ function hasUsableContent(item: ReviewWord, mode: PracticeMode) {
   const hasMeaning = Boolean(content.turkish_meaning || content.simple_definition);
 
   if (mode === "fill") {
-    return hasMeaning && Boolean(content.daily_life_example || content.toefl_example);
+    return hasMeaning && Boolean(
+      content.fill_blank_sentence ||
+        content.daily_life_example ||
+        content.toefl_example
+    );
   }
 
   return hasMeaning;
@@ -480,16 +544,19 @@ function buildMeaningQuestion(
   currentWord: ReviewWord,
   allWords: ReviewWord[]
 ): QuizQuestion {
-  const correctAnswer = getMeaning(currentWord);
+  const fullMeaning = getMeaning(currentWord);
+  const correctAnswer = cleanMeaningChoice(fullMeaning);
 
   const otherMeanings = allWords
     .filter((item) => item.id !== currentWord.id)
-    .map(getMeaning)
+    .map((item) => cleanMeaningChoice(getMeaning(item)))
     .filter((item) => item.length > 0)
     .filter((item) => item !== correctAnswer);
 
+  const aiDistractors = getMeaningDistractors(currentWord).map(cleanMeaningChoice);
+
   const options = buildStableOptions(
-    [correctAnswer, ...otherMeanings, ...FALLBACK_MEANINGS],
+    [correctAnswer, ...aiDistractors, ...otherMeanings, ...FALLBACK_MEANINGS],
     currentWord.id
   );
 
@@ -498,11 +565,20 @@ function buildMeaningQuestion(
     title: getWord(currentWord),
     prompt: "What does this word mean?",
     correctAnswer,
-    meaning: getMeaning(currentWord),
+    meaning: fullMeaning,
     simpleMeaning: getSimpleMeaning(currentWord),
     example: getExample(currentWord),
+    exampleTr: getExampleTr(currentWord),
     options,
   };
+}
+
+function cleanMeaningChoice(value: string) {
+  return value
+    .replace(/\s*\([^)]*\)/g, "")
+    .split(";")[0]
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function buildReverseQuestion(
@@ -517,8 +593,10 @@ function buildReverseQuestion(
     .filter((item) => item.length > 0)
     .filter((item) => item !== correctAnswer);
 
+  const aiDistractors = getWordDistractors(currentWord);
+
   const options = buildStableOptions(
-    [correctAnswer, ...otherWords, ...FALLBACK_WORDS],
+    [correctAnswer, ...aiDistractors, ...otherWords, ...FALLBACK_WORDS],
     currentWord.id
   );
 
@@ -530,6 +608,7 @@ function buildReverseQuestion(
     meaning: getMeaning(currentWord),
     simpleMeaning: getSimpleMeaning(currentWord),
     example: getExample(currentWord),
+    exampleTr: getExampleTr(currentWord),
     options,
   };
 }
@@ -538,8 +617,8 @@ function buildFillQuestion(
   currentWord: ReviewWord,
   allWords: ReviewWord[]
 ): QuizQuestion {
-  const correctAnswer = getWord(currentWord);
-  const example = getExample(currentWord);
+  const correctAnswer = getFillBlankAnswer(currentWord);
+  const example = getFillBlankSentence(currentWord);
   const blankedExample = createBlankedExample(example, correctAnswer);
 
   const otherWords = allWords
@@ -548,8 +627,10 @@ function buildFillQuestion(
     .filter((item) => item.length > 0)
     .filter((item) => item !== correctAnswer);
 
+  const aiDistractors = getWordDistractors(currentWord);
+
   const options = buildStableOptions(
-    [correctAnswer, ...otherWords, ...FALLBACK_WORDS],
+    [correctAnswer, ...aiDistractors, ...otherWords, ...FALLBACK_WORDS],
     currentWord.id
   );
 
@@ -561,6 +642,7 @@ function buildFillQuestion(
     meaning: getMeaning(currentWord),
     simpleMeaning: getSimpleMeaning(currentWord),
     example,
+    exampleTr: getFillBlankSentenceTr(currentWord),
     options,
   };
 }
