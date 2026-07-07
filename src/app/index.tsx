@@ -99,6 +99,7 @@ export default function HomeScreen() {
 
   const [word, setWord] = useState("");
   const [newSetName, setNewSetName] = useState("");
+  const [editingSetName, setEditingSetName] = useState("");
 
   const [words, setWords] = useState<UserWord[]>([]);
   const [sets, setSets] = useState<WordSet[]>([]);
@@ -290,6 +291,105 @@ export default function HomeScreen() {
     await loadSets();
   }
 
+  async function handleRenameSelectedSet() {
+    if (!selectedSet) return;
+
+    const cleanName = editingSetName.trim();
+
+    if (!cleanName) {
+      Alert.alert("Missing set name", "Set name cannot be empty.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("word_sets")
+      .update({
+        name: cleanName,
+      })
+      .eq("id", selectedSet.id);
+
+    if (error) {
+      Alert.alert("Could not rename set", error.message);
+      return;
+    }
+
+    await loadSets();
+  }
+
+  function confirmDeleteSelectedSet() {
+    if (!selectedSet) return;
+
+    Alert.alert(
+      "Delete set?",
+      `This will delete the "${selectedSet.name}" set. Your words will stay in All words.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete set",
+          style: "destructive",
+          onPress: deleteSelectedSet,
+        },
+      ]
+    );
+  }
+
+  async function deleteSelectedSet() {
+    if (!selectedSet) return;
+
+    const { error } = await supabase
+      .from("word_sets")
+      .delete()
+      .eq("id", selectedSet.id);
+
+    if (error) {
+      Alert.alert("Could not delete set", error.message);
+      return;
+    }
+
+    setSelectedSetId(null);
+    await loadSets();
+  }
+
+  function confirmRemoveWordFromSelectedSet(item: UserWord) {
+    if (!selectedSet) return;
+
+    Alert.alert(
+      "Remove from set?",
+      `Remove "${getDisplayWord(item)}" from "${selectedSet.name}"? The word will stay in All words.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => removeWordFromSelectedSet(item),
+        },
+      ]
+    );
+  }
+
+  async function removeWordFromSelectedSet(item: UserWord) {
+    if (!selectedSet) return;
+
+    const { error } = await supabase
+      .from("word_set_items")
+      .delete()
+      .eq("set_id", selectedSet.id)
+      .eq("user_word_id", item.id);
+
+    if (error) {
+      Alert.alert("Could not remove word from set", error.message);
+      return;
+    }
+
+    await loadSets();
+  }
+
   async function handleAddWord() {
     const cleanWord = word.trim();
 
@@ -385,6 +485,10 @@ export default function HomeScreen() {
   }
 
   const selectedSet = sets.find((set) => set.id === selectedSetId) ?? null;
+
+  useEffect(() => {
+    setEditingSetName(selectedSet?.name ?? "");
+  }, [selectedSet?.id, selectedSet?.name]);
 
   const visibleWords = useMemo(() => {
     if (!selectedSetId) return words;
@@ -565,6 +669,33 @@ export default function HomeScreen() {
             );
           })}
         </ScrollView>
+
+        {selectedSet ? (
+          <View style={styles.manageSetBox}>
+            <Text style={styles.manageSetTitle}>Manage selected set</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Set name"
+              value={editingSetName}
+              onChangeText={setEditingSetName}
+              onSubmitEditing={handleRenameSelectedSet}
+            />
+
+            <View style={styles.setManageActions}>
+              <Pressable style={styles.smallButton} onPress={handleRenameSelectedSet}>
+                <Text style={styles.smallButtonText}>Rename</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.smallDangerButton}
+                onPress={confirmDeleteSelectedSet}
+              >
+                <Text style={styles.smallDangerButtonText}>Delete set</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.createSetBox}>
           <TextInput
@@ -765,11 +896,11 @@ export default function HomeScreen() {
               const aiReady = hasAiContent(item);
 
               return (
-                <Pressable
-                  key={item.id}
-                  style={styles.wordItem}
-                  onPress={() => openWordDetail(item)}
-                >
+                <View key={item.id} style={styles.wordItem}>
+                  <Pressable
+                    style={styles.wordOpenArea}
+                    onPress={() => openWordDetail(item)}
+                  >
                   <View style={styles.wordMainContent}>
                     <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
 
@@ -800,8 +931,20 @@ export default function HomeScreen() {
                     </View>
                   </View>
 
-                  <Text style={styles.chevron}>›</Text>
-                </Pressable>
+                    <Text style={styles.chevron}>›</Text>
+                  </Pressable>
+
+                  {selectedSet ? (
+                    <Pressable
+                      style={styles.removeFromSetButton}
+                      onPress={() => confirmRemoveWordFromSelectedSet(item)}
+                    >
+                      <Text style={styles.removeFromSetButtonText}>
+                        Remove from this set
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               );
             })}
           </View>
@@ -904,6 +1047,50 @@ const styles = StyleSheet.create({
   },
   createSetBox: {
     marginTop: 4,
+  },
+  manageSetBox: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  manageSetTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#0f172a",
+    marginBottom: 10,
+  },
+  setManageActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  smallButton: {
+    flex: 1,
+    backgroundColor: "#2563eb",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  smallButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  smallDangerButton: {
+    flex: 1,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  smallDangerButtonText: {
+    color: "#991b1b",
+    fontSize: 14,
+    fontWeight: "900",
   },
   practiceCard: {
     backgroundColor: "#2563eb",
@@ -1161,11 +1348,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 14,
-    padding: 14,
     backgroundColor: "#f8fafc",
+    overflow: "hidden",
+  },
+  wordOpenArea: {
+    padding: 14,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  removeFromSetButton: {
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+  },
+  removeFromSetButtonText: {
+    color: "#dc2626",
+    fontSize: 14,
+    fontWeight: "900",
   },
   wordMainContent: {
     flex: 1,
