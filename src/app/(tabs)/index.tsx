@@ -786,7 +786,7 @@ export default function HomeScreen() {
 
       <View style={styles.practiceCard}>
         <Text style={styles.practiceEyebrow}>
-          {selectedSet ? selectedSet.name : "Library"}
+          {selectedSet ? selectedSet.name : "All Words"}
         </Text>
         <Text style={styles.practiceTitle}>Study plan</Text>
         <Text style={styles.practiceText}>{practiceSummaryText}</Text>
@@ -936,7 +936,7 @@ export default function HomeScreen() {
           <View style={styles.quickAddScopePill}>
             <Text style={styles.quickAddScopeLabel}>Adds to</Text>
             <Text style={styles.quickAddScopeValue} numberOfLines={1}>
-              {selectedSet ? selectedSet.name : "Library"}
+              {selectedSet ? selectedSet.name : "All Words"}
             </Text>
           </View>
         </View>
