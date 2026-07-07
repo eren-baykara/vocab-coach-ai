@@ -782,7 +782,7 @@ export default function HomeScreen() {
 
       <View style={styles.card}>
         <View style={styles.wordsHeader}>
-          <Text style={styles.sectionTitle}>My Sets</Text>
+          <Text style={styles.sectionTitle}>Choose a study set</Text>
 
           <Pressable onPress={loadSets} disabled={setsLoading}>
             <Text style={styles.refreshText}>
@@ -905,18 +905,18 @@ export default function HomeScreen() {
         <Text style={styles.practiceEyebrow}>
           {selectedSet ? selectedSet.name : "Library"}
         </Text>
-        <Text style={styles.practiceTitle}>Practice modes</Text>
+        <Text style={styles.practiceTitle}>Study plan</Text>
         <Text style={styles.practiceText}>{practiceSummaryText}</Text>
 
         <View style={styles.practiceStatsRow}>
           <View style={styles.practiceStatPill}>
             <Text style={styles.practiceStatNumber}>{aiReadyCount}</Text>
-            <Text style={styles.practiceStatLabel}>practice ready</Text>
+            <Text style={styles.practiceStatLabel}>ready</Text>
           </View>
 
           <View style={styles.practiceStatPill}>
             <Text style={styles.practiceStatNumber}>{dueCount}</Text>
-            <Text style={styles.practiceStatLabel}>due now</Text>
+            <Text style={styles.practiceStatLabel}>review today</Text>
           </View>
         </View>
 
@@ -1043,23 +1043,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.statsCard}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{visibleWords.length}</Text>
-          <Text style={styles.statLabel}>
-            {selectedSet ? "Set words" : "Library words"}
-          </Text>
-        </View>
-
-        <View style={styles.statDivider} />
-
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{aiReadyCount}</Text>
-          <Text style={styles.statLabel}>Practice ready</Text>
-        </View>
-      </View>
-
-      <View style={styles.card}>
+       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Add a new word</Text>
         <Text style={styles.helperText}>
           {selectedSet
@@ -1156,8 +1140,8 @@ export default function HomeScreen() {
                     style={styles.wordOpenArea}
                     onPress={() => openWordDetail(item)}
                   >
-                  <View style={styles.wordMainContent}>
-                    <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
+                    <View style={styles.wordMainContent}>
+                      <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
 
                     <View style={styles.badgeRow}>
                       <View style={styles.statusBadge}>
@@ -1186,7 +1170,7 @@ export default function HomeScreen() {
                     </View>
                   </View>
 
-                    <Text style={styles.chevron}>›</Text>
+                  <Text style={styles.chevron}>›</Text>
                   </Pressable>
 
                   {selectedSet ? (
