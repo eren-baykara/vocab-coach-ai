@@ -835,6 +835,31 @@ export default function HomeScreen() {
 
         <View style={styles.modeList}>
           <PracticeModeButton
+            title="Card Sort"
+            description="Quickly separate known words from words you still need."
+            readyCount={visibleWords.length}
+            totalReadyCount={visibleWords.length}
+            footerText={
+              visibleWords.length > 0
+                ? `${visibleWords.length} cards available`
+                : "Add words first."
+            }
+            disabled={visibleWords.length === 0}
+            disabledReason="Add words first."
+            onPress={() =>
+              router.push({
+                pathname: "/card-sort" as never,
+                params: selectedSet
+                  ? {
+                      setId: selectedSet.id,
+                      setName: selectedSet.name,
+                    }
+                  : {},
+              })
+            }
+          />
+
+          <PracticeModeButton
             title="Meaning Quiz"
             description="See the word, choose the Turkish meaning."
             readyCount={meaningDueCount}
@@ -1078,6 +1103,7 @@ type PracticeModeButtonProps = {
   description: string;
   readyCount: number;
   totalReadyCount: number;
+  footerText?: string;
   disabled: boolean;
   disabledReason: string;
   onPress: () => void;
@@ -1088,6 +1114,7 @@ function PracticeModeButton({
   description,
   readyCount,
   totalReadyCount,
+  footerText,
   disabled,
   disabledReason,
   onPress,
@@ -1102,11 +1129,13 @@ function PracticeModeButton({
         <Text style={styles.practiceModeTitle}>{title}</Text>
         <Text style={styles.practiceModeDescription}>{description}</Text>
         <Text style={styles.practiceModeDescription}>
-          {disabled
-            ? disabledReason
-            : readyCount > 0
-              ? `${readyCount} due now • ${totalReadyCount} ready`
-              : `Practice anytime • ${totalReadyCount} ready`}
+          {footerText
+            ? footerText
+            : disabled
+              ? disabledReason
+              : readyCount > 0
+                ? `${readyCount} due now • ${totalReadyCount} ready`
+                : `Practice anytime • ${totalReadyCount} ready`}
         </Text>
       </View>
 
