@@ -926,27 +926,42 @@ export default function HomeScreen() {
         </View>
       </View>
 
-       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Add a new word</Text>
-        <Text style={styles.helperText}>
+      <View style={styles.quickAddCard}>
+        <View style={styles.quickAddHeader}>
+          <View style={styles.quickAddTitleBlock}>
+            <Text style={styles.quickAddEyebrow}>Quick Add</Text>
+            <Text style={styles.quickAddTitle}>Add a word while it is fresh</Text>
+          </View>
+
+          <View style={styles.quickAddScopePill}>
+            <Text style={styles.quickAddScopeLabel}>Adds to</Text>
+            <Text style={styles.quickAddScopeValue} numberOfLines={1}>
+              {selectedSet ? selectedSet.name : "Library"}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.quickAddSubtitle}>
           {selectedSet
-            ? `New words will be added to the "${selectedSet.name}" set.`
-            : "Choose a set above to add the word there. Otherwise it goes only to Library."}
+            ? "Saved to Library and linked to this set automatically."
+            : "Choose a set above to add it there, or save it only to Library."}
         </Text>
 
         <TextInput
-          style={styles.input}
-          placeholder="Example: usually"
+          style={styles.quickAddInput}
+          placeholder="Type a word, e.g. usually"
           autoCapitalize="none"
+          autoCorrect={false}
           value={word}
           onChangeText={setWord}
           editable={!wordActionLoading}
           onSubmitEditing={() => handleAddWord(false)}
+          returnKeyType="done"
         />
 
         {wordSuggestions.length > 0 ? (
           <View style={styles.suggestionsWrap}>
-            <Text style={styles.suggestionsLabel}>Suggestions</Text>
+            <Text style={styles.suggestionsLabel}>Already in Library</Text>
 
             <View style={styles.suggestionList}>
               {wordSuggestions.map((suggestion) => (
@@ -962,40 +977,37 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        <Pressable
-          style={[styles.button, wordActionLoading && styles.disabledButton]}
-          onPress={() => handleAddWord(false)}
-          disabled={wordActionLoading}
-        >
-          <Text style={styles.buttonText}>
-            {addingWord ? "Adding..." : "Add word"}
-          </Text>
-        </Pressable>
+        <View style={styles.quickAddActions}>
+          <Pressable
+            style={[
+              styles.quickAddPrimaryButton,
+              wordActionLoading && styles.disabledButton,
+            ]}
+            onPress={() => handleAddWord(true)}
+            disabled={wordActionLoading}
+          >
+            <Text style={styles.quickAddPrimaryButtonText}>
+              {addingWordWithAi ? "Generating..." : "Add + Generate AI"}
+            </Text>
+          </Pressable>
 
-        <Pressable
-          style={[styles.secondaryButton, wordActionLoading && styles.disabledButton]}
-          onPress={() => handleAddWord(true)}
-          disabled={wordActionLoading}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {addingWordWithAi ? "Generating..." : "Add + Generate AI"}
-          </Text>
-        </Pressable>
-      </View>
+          <Pressable
+            style={[
+              styles.quickAddSecondaryButton,
+              wordActionLoading && styles.disabledButton,
+            ]}
+            onPress={() => handleAddWord(false)}
+            disabled={wordActionLoading}
+          >
+            <Text style={styles.quickAddSecondaryButtonText}>
+              {addingWord ? "Adding..." : "Add only"}
+            </Text>
+          </Pressable>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Word archive</Text>
-        <Text style={styles.helperText}>
-          Open the Library tab to search all words, check AI readiness, and view
-          word details.
+        <Text style={styles.quickAddTip}>
+          AI generation prepares meanings, examples, and practice questions.
         </Text>
-
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => router.push("/library" as never)}
-        >
-          <Text style={styles.secondaryButtonText}>Open Library</Text>
-        </Pressable>
       </View>
     </ScrollView>
   );
@@ -1335,6 +1347,114 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 14,
   },
+  quickAddCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+  },
+  quickAddHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 10,
+  },
+  quickAddTitleBlock: {
+    flex: 1,
+  },
+  quickAddEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  quickAddTitle: {
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 28,
+  },
+  quickAddScopePill: {
+    maxWidth: "42%",
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  quickAddScopeLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  quickAddScopeValue: {
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  quickAddSubtitle: {
+    color: "#64748b",
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 14,
+  },
+  quickAddInput: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    fontSize: 17,
+    color: "#0f172a",
+    marginBottom: 12,
+  },
+  quickAddActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 2,
+  },
+  quickAddPrimaryButton: {
+    flex: 1.4,
+    backgroundColor: "#2563eb",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  quickAddPrimaryButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  quickAddSecondaryButton: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  quickAddSecondaryButtonText: {
+    color: "#334155",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  quickAddTip: {
+    color: "#94a3b8",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 12,
+  },
   input: {
     backgroundColor: "#ffffff",
     borderWidth: 1,
@@ -1347,14 +1467,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   suggestionsWrap: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    padding: 12,
     marginBottom: 12,
   },
   suggestionsLabel: {
     color: "#64748b",
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     marginBottom: 8,
     textTransform: "uppercase",
+    letterSpacing: 0.7,
   },
   suggestionList: {
     flexDirection: "row",
@@ -1362,9 +1488,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   suggestionChip: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#bfdbfe",
+    borderColor: "#cbd5e1",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1372,7 +1498,7 @@ const styles = StyleSheet.create({
   suggestionText: {
     color: "#1d4ed8",
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   button: {
     backgroundColor: "#2563eb",
