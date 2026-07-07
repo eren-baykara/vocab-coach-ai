@@ -9,13 +9,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../lib/supabase";
 
 type WordContent = {
   display_word: string | null;
+  simple_definition: string | null;
+  mini_lesson: string | null;
 };
 
 type UserWord = {
@@ -69,7 +71,9 @@ export default function HomeScreen() {
         status,
         created_at,
         word_contents (
-          display_word
+          display_word,
+          simple_definition,
+          mini_lesson
         )
       `
       )
@@ -92,6 +96,14 @@ export default function HomeScreen() {
       setWords([]);
     }
   }, [session, loadWords]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session) {
+        loadWords();
+      }
+    }, [session, loadWords])
+  );
 
   async function handleSignUp() {
     if (!email.trim() || !password.trim()) {
@@ -169,12 +181,22 @@ export default function HomeScreen() {
     await loadWords();
   }
 
-  function getDisplayWord(item: UserWord) {
-    const content = Array.isArray(item.word_contents)
+  function getContent(item: UserWord) {
+    return Array.isArray(item.word_contents)
       ? item.word_contents[0]
       : item.word_contents;
+  }
+
+  function getDisplayWord(item: UserWord) {
+    const content = getContent(item);
 
     return content?.display_word ?? "Untitled word";
+  }
+
+  function hasAiContent(item: UserWord) {
+    const content = getContent(item);
+
+    return Boolean(content?.simple_definition || content?.mini_lesson);
   }
 
   function openWordDetail(item: UserWord) {
@@ -183,6 +205,8 @@ export default function HomeScreen() {
       params: { id: item.id },
     });
   }
+
+  const aiReadyCount = words.filter(hasAiContent).length;
 
   if (initialLoading) {
     return (
@@ -254,6 +278,20 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.statsCard}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{words.length}</Text>
+          <Text style={styles.statLabel}>Total words</Text>
+        </View>
+
+        <View style={styles.statDivider} />
+
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{aiReadyCount}</Text>
+          <Text style={styles.statLabel}>AI ready</Text>
+        </View>
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Add a new word</Text>
 
@@ -264,6 +302,7 @@ export default function HomeScreen() {
           value={word}
           onChangeText={setWord}
           editable={!addingWord}
+          onSubmitEditing={handleAddWord}
         />
 
         <Pressable
@@ -302,20 +341,49 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={styles.wordList}>
-            {words.map((item) => (
-              <Pressable
-                key={item.id}
-                style={styles.wordItem}
-                onPress={() => openWordDetail(item)}
-              >
-                <View>
-                  <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
-                  <Text style={styles.statusText}>{item.status ?? "new"}</Text>
-                </View>
+            {words.map((item) => {
+              const aiReady = hasAiContent(item);
 
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
+              return (
+                <Pressable
+                  key={item.id}
+                  style={styles.wordItem}
+                  onPress={() => openWordDetail(item)}
+                >
+                  <View style={styles.wordMainContent}>
+                    <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
+
+                    <View style={styles.badgeRow}>
+                      <View style={styles.statusBadge}>
+                        <Text style={styles.statusBadgeText}>
+                          {item.status ?? "new"}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.aiBadge,
+                          aiReady ? styles.aiReadyBadge : styles.aiMissingBadge,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.aiBadgeText,
+                            aiReady
+                              ? styles.aiReadyBadgeText
+                              : styles.aiMissingBadgeText,
+                          ]}
+                        >
+                          {aiReady ? "AI ready" : "Needs AI"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              );
+            })}
           </View>
         )}
       </View>
@@ -351,6 +419,36 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+  },
+  statsCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statNumber: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: "#64748b",
+    fontWeight: "600",
+  },
+  statDivider: {
+    width: 1,
+    height: 44,
+    backgroundColor: "#e2e8f0",
   },
   title: {
     fontSize: 32,
@@ -459,15 +557,54 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  wordMainContent: {
+    flex: 1,
+    paddingRight: 12,
+  },
   wordText: {
     fontSize: 18,
     fontWeight: "700",
     color: "#0f172a",
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  statusText: {
-    fontSize: 14,
-    color: "#64748b",
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusBadge: {
+    backgroundColor: "#e0f2fe",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusBadgeText: {
+    color: "#0369a1",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  aiBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  aiReadyBadge: {
+    backgroundColor: "#dcfce7",
+  },
+  aiMissingBadge: {
+    backgroundColor: "#fef3c7",
+  },
+  aiBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  aiReadyBadgeText: {
+    color: "#166534",
+  },
+  aiMissingBadgeText: {
+    color: "#92400e",
   },
   chevron: {
     fontSize: 30,
