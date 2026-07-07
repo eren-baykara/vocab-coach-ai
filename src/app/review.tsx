@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Stack, router } from "expo-router";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 
 import { supabase } from "../lib/supabase";
 
@@ -78,6 +78,10 @@ const FALLBACK_MEANINGS = [
 ];
 
 export default function ReviewScreen() {
+  const params = useLocalSearchParams<{ setId?: string; setName?: string }>();
+  const selectedSetId = typeof params.setId === "string" ? params.setId : null;
+  const selectedSetName = typeof params.setName === "string" ? params.setName : null;
+
   const [loading, setLoading] = useState(true);
   const [savingResult, setSavingResult] = useState(false);
 
@@ -97,14 +101,32 @@ export default function ReviewScreen() {
       .select(REVIEW_SELECT)
       .order("next_review_at", { ascending: true, nullsFirst: true });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       Alert.alert("Could not load practice", error.message);
       return;
     }
 
-    const typedWords = ((data ?? []) as ReviewWord[]).filter(hasUsableMeaning);
+    let typedWords = ((data ?? []) as ReviewWord[]).filter(hasUsableMeaning);
+
+    if (selectedSetId) {
+      const { data: setItemsData, error: setItemsError } = await supabase
+        .from("word_set_items")
+        .select("user_word_id")
+        .eq("set_id", selectedSetId);
+
+      if (setItemsError) {
+        setLoading(false);
+        Alert.alert("Could not load set practice", setItemsError.message);
+        return;
+      }
+
+      const setWordIds = new Set(
+        (setItemsData ?? []).map((item) => item.user_word_id as string)
+      );
+
+      typedWords = typedWords.filter((item) => setWordIds.has(item.id));
+    }
 
     const dueWords = typedWords.filter(isDue);
     const notDueWords = typedWords.filter((item) => !isDue(item));
@@ -116,49 +138,12 @@ export default function ReviewScreen() {
     setCompletedCount(0);
     setSelectedAnswer(null);
     setLastWasCorrect(null);
-  }, []);
+    setLoading(false);
+  }, [selectedSetId]);
 
   useEffect(() => {
     loadPracticeWords();
   }, [loadPracticeWords]);
-
-  function getContent(item: ReviewWord) {
-    return Array.isArray(item.word_contents)
-      ? item.word_contents[0]
-      : item.word_contents;
-  }
-
-  function getDisplayWord(item: ReviewWord) {
-    const content = getContent(item);
-
-    return content?.display_word ?? "Untitled word";
-  }
-
-  function getCorrectMeaning(item: ReviewWord) {
-    const content = getContent(item);
-
-    return (
-      content?.turkish_meaning ||
-      content?.simple_definition ||
-      "Meaning has not been generated yet."
-    );
-  }
-
-  function getSimpleMeaning(item: ReviewWord) {
-    const content = getContent(item);
-
-    return content?.simple_definition || "Simple meaning has not been generated yet.";
-  }
-
-  function getExample(item: ReviewWord) {
-    const content = getContent(item);
-
-    return (
-      content?.daily_life_example ||
-      content?.toefl_example ||
-      "Example sentence has not been generated yet."
-    );
-  }
 
   async function submitAnswer() {
     const currentWord = practiceWords[0];
@@ -184,7 +169,6 @@ export default function ReviewScreen() {
 
     if (error) {
       Alert.alert("Could not save answer", error.message);
-      return;
     }
   }
 
@@ -248,7 +232,9 @@ export default function ReviewScreen() {
             ? `Nice work. You answered ${completedCount} question${
                 completedCount === 1 ? "" : "s"
               }.`
-            : "Add words and generate AI content first. Then Practice will quiz your vocabulary list."}
+            : selectedSetName
+              ? `The "${selectedSetName}" set needs words with AI content first.`
+              : "Add words and generate AI content first."}
         </Text>
 
         <Pressable style={styles.button} onPress={() => router.back()}>
@@ -269,7 +255,9 @@ export default function ReviewScreen() {
       </Pressable>
 
       <View style={styles.progressCard}>
-        <Text style={styles.progressText}>{progressText}</Text>
+        <Text style={styles.progressText}>
+          {selectedSetName ? `${selectedSetName} • ${progressText}` : progressText}
+        </Text>
       </View>
 
       <View style={styles.quizCard}>
@@ -286,8 +274,7 @@ export default function ReviewScreen() {
             const isSelected = selectedAnswer === option;
             const isCorrect = option === question.correctAnswer;
             const showCorrect = answerSubmitted && isCorrect;
-            const showWrong =
-              answerSubmitted && isSelected && !isCorrect;
+            const showWrong = answerSubmitted && isSelected && !isCorrect;
 
             return (
               <Pressable
@@ -349,12 +336,12 @@ export default function ReviewScreen() {
             </Text>
 
             <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Basit anlam / Simple meaning</Text>
+              <Text style={styles.resultLabel}>Basit anlam</Text>
               <Text style={styles.resultText}>{question.simpleMeaning}</Text>
             </View>
 
             <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Örnek / Example</Text>
+              <Text style={styles.resultLabel}>Örnek cümle</Text>
               <Text style={styles.resultText}>{question.example}</Text>
             </View>
 
@@ -411,10 +398,7 @@ function buildQuizQuestion(
     new Set([correctAnswer, ...otherMeanings, ...FALLBACK_MEANINGS])
   ).slice(0, 4);
 
-  const stableOptions = sortOptionsStable(
-    combinedOptions,
-    currentWord.id
-  );
+  const stableOptions = sortOptionsStable(combinedOptions, currentWord.id);
 
   return {
     word: currentContent?.display_word ?? "Untitled word",

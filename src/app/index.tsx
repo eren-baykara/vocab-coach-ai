@@ -29,6 +29,19 @@ type UserWord = {
   word_contents: WordContent | WordContent[] | null;
 };
 
+type WordSet = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
+
+type WordSetItem = {
+  id: string;
+  set_id: string;
+  user_word_id: string;
+};
+
 const COMMON_WORD_SUGGESTIONS = [
   "usually",
   "usual",
@@ -80,10 +93,17 @@ export default function HomeScreen() {
 
   const [authLoading, setAuthLoading] = useState(false);
   const [wordsLoading, setWordsLoading] = useState(false);
+  const [setsLoading, setSetsLoading] = useState(false);
   const [addingWord, setAddingWord] = useState(false);
+  const [creatingSet, setCreatingSet] = useState(false);
 
   const [word, setWord] = useState("");
+  const [newSetName, setNewSetName] = useState("");
+
   const [words, setWords] = useState<UserWord[]>([]);
+  const [sets, setSets] = useState<WordSet[]>([]);
+  const [setItems, setSetItems] = useState<WordSetItem[]>([]);
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -135,20 +155,58 @@ export default function HomeScreen() {
     setWords((data ?? []) as UserWord[]);
   }, [session]);
 
+  const loadSets = useCallback(async () => {
+    if (!session) return;
+
+    setSetsLoading(true);
+
+    const { data: setsData, error: setsError } = await supabase
+      .from("word_sets")
+      .select("id, name, description, created_at")
+      .order("created_at", { ascending: true });
+
+    if (setsError) {
+      setSetsLoading(false);
+      Alert.alert("Could not load sets", setsError.message);
+      return;
+    }
+
+    const { data: itemsData, error: itemsError } = await supabase
+      .from("word_set_items")
+      .select("id, set_id, user_word_id");
+
+    setSetsLoading(false);
+
+    if (itemsError) {
+      Alert.alert("Could not load set words", itemsError.message);
+      return;
+    }
+
+    setSets((setsData ?? []) as WordSet[]);
+    setSetItems((itemsData ?? []) as WordSetItem[]);
+  }, [session]);
+
+  async function refreshAll() {
+    await Promise.all([loadWords(), loadSets()]);
+  }
+
   useEffect(() => {
     if (session) {
-      loadWords();
+      refreshAll();
     } else {
       setWords([]);
+      setSets([]);
+      setSetItems([]);
+      setSelectedSetId(null);
     }
-  }, [session, loadWords]);
+  }, [session, loadWords, loadSets]);
 
   useFocusEffect(
     useCallback(() => {
       if (session) {
-        loadWords();
+        refreshAll();
       }
-    }, [session, loadWords])
+    }, [session, loadWords, loadSets])
   );
 
   async function handleSignUp() {
@@ -202,6 +260,36 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleCreateSet() {
+    const cleanName = newSetName.trim();
+
+    if (!cleanName) {
+      Alert.alert("Missing set name", "Please enter a name like TOEFL or Daily English.");
+      return;
+    }
+
+    setCreatingSet(true);
+
+    const { data, error } = await supabase
+      .from("word_sets")
+      .insert({
+        name: cleanName,
+      })
+      .select("id, name, description, created_at")
+      .single();
+
+    setCreatingSet(false);
+
+    if (error) {
+      Alert.alert("Could not create set", error.message);
+      return;
+    }
+
+    setNewSetName("");
+    setSelectedSetId(data.id);
+    await loadSets();
+  }
+
   async function handleAddWord() {
     const cleanWord = word.trim();
 
@@ -216,15 +304,45 @@ export default function HomeScreen() {
       input_word: cleanWord,
     });
 
-    setAddingWord(false);
-
     if (error) {
+      setAddingWord(false);
       Alert.alert("Could not add word", error.message);
       return;
     }
 
+    if (selectedSetId) {
+      const { data: latestWord, error: latestWordError } = await supabase
+        .from("user_words")
+        .select("id")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestWordError) {
+        setAddingWord(false);
+        Alert.alert("Word added, but could not add it to set", latestWordError.message);
+        return;
+      }
+
+      if (latestWord) {
+        const { error: setError } = await supabase
+          .from("word_set_items")
+          .insert({
+            set_id: selectedSetId,
+            user_word_id: latestWord.id,
+          });
+
+        if (setError && setError.code !== "23505") {
+          setAddingWord(false);
+          Alert.alert("Word added, but could not add it to set", setError.message);
+          return;
+        }
+      }
+    }
+
+    setAddingWord(false);
     setWord("");
-    await loadWords();
+    await refreshAll();
   }
 
   function getContent(item: UserWord) {
@@ -262,8 +380,26 @@ export default function HomeScreen() {
     });
   }
 
-  const aiReadyCount = words.filter(hasAiContent).length;
-  const dueCount = words.filter((item) => hasAiContent(item) && isDue(item)).length;
+  function countWordsInSet(setId: string) {
+    return setItems.filter((item) => item.set_id === setId).length;
+  }
+
+  const selectedSet = sets.find((set) => set.id === selectedSetId) ?? null;
+
+  const visibleWords = useMemo(() => {
+    if (!selectedSetId) return words;
+
+    const selectedWordIds = new Set(
+      setItems
+        .filter((item) => item.set_id === selectedSetId)
+        .map((item) => item.user_word_id)
+    );
+
+    return words.filter((item) => selectedWordIds.has(item.id));
+  }, [words, setItems, selectedSetId]);
+
+  const aiReadyCount = visibleWords.filter(hasAiContent).length;
+  const dueCount = visibleWords.filter((item) => hasAiContent(item) && isDue(item)).length;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -351,7 +487,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Vocab Coach AI</Text>
-          <Text style={styles.subtitle}>Don't memorize. Practice using words.</Text>
+          <Text style={styles.subtitle}>Build sets. Practice words. Actually use them.</Text>
         </View>
 
         <Pressable style={styles.signOutButton} onPress={handleSignOut}>
@@ -359,12 +495,107 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.card}>
+        <View style={styles.wordsHeader}>
+          <Text style={styles.sectionTitle}>My Sets</Text>
+
+          <Pressable onPress={loadSets} disabled={setsLoading}>
+            <Text style={styles.refreshText}>
+              {setsLoading ? "Loading..." : "Refresh"}
+            </Text>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.setList}
+        >
+          <Pressable
+            style={[
+              styles.setChip,
+              selectedSetId === null && styles.activeSetChip,
+            ]}
+            onPress={() => setSelectedSetId(null)}
+          >
+            <Text
+              style={[
+                styles.setChipTitle,
+                selectedSetId === null && styles.activeSetChipTitle,
+              ]}
+            >
+              All words
+            </Text>
+            <Text
+              style={[
+                styles.setChipMeta,
+                selectedSetId === null && styles.activeSetChipMeta,
+              ]}
+            >
+              {words.length} words
+            </Text>
+          </Pressable>
+
+          {sets.map((set) => {
+            const active = selectedSetId === set.id;
+
+            return (
+              <Pressable
+                key={set.id}
+                style={[styles.setChip, active && styles.activeSetChip]}
+                onPress={() => setSelectedSetId(set.id)}
+              >
+                <Text
+                  style={[
+                    styles.setChipTitle,
+                    active && styles.activeSetChipTitle,
+                  ]}
+                >
+                  {set.name}
+                </Text>
+                <Text
+                  style={[
+                    styles.setChipMeta,
+                    active && styles.activeSetChipMeta,
+                  ]}
+                >
+                  {countWordsInSet(set.id)} words
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.createSetBox}>
+          <TextInput
+            style={styles.input}
+            placeholder="Create a set: TOEFL, Daily English..."
+            value={newSetName}
+            onChangeText={setNewSetName}
+            editable={!creatingSet}
+            onSubmitEditing={handleCreateSet}
+          />
+
+          <Pressable
+            style={[styles.button, creatingSet && styles.disabledButton]}
+            onPress={handleCreateSet}
+            disabled={creatingSet}
+          >
+            <Text style={styles.buttonText}>
+              {creatingSet ? "Creating..." : "Create set"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
       <View style={styles.practiceCard}>
-        <Text style={styles.practiceEyebrow}>Today's practice</Text>
+        <Text style={styles.practiceEyebrow}>
+          {selectedSet ? selectedSet.name : "All words"}
+        </Text>
         <Text style={styles.practiceTitle}>Meaning Quiz</Text>
         <Text style={styles.practiceText}>
-          Practice your whole vocabulary list with multiple-choice meaning
-          questions.
+          Practice {selectedSet ? "this set" : "your whole vocabulary"} with
+          multiple-choice meaning questions.
         </Text>
 
         <View style={styles.practiceStatsRow}>
@@ -384,7 +615,14 @@ export default function HomeScreen() {
             styles.practiceButton,
             aiReadyCount === 0 && styles.disabledButton,
           ]}
-          onPress={() => router.push("/review")}
+          onPress={() =>
+            router.push({
+              pathname: "/review",
+              params: selectedSet
+                ? { setId: selectedSet.id, setName: selectedSet.name }
+                : {},
+            })
+          }
           disabled={aiReadyCount === 0}
         >
           <Text style={styles.practiceButtonText}>
@@ -395,22 +633,26 @@ export default function HomeScreen() {
 
       <View style={styles.statsCard}>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{words.length}</Text>
-          <Text style={styles.statLabel}>Total words</Text>
+          <Text style={styles.statNumber}>{visibleWords.length}</Text>
+          <Text style={styles.statLabel}>
+            {selectedSet ? "Set words" : "Total words"}
+          </Text>
         </View>
 
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{aiReadyCount}</Text>
-          <Text style={styles.statLabel}>AI ready</Text>
+          <Text style={styles.statLabel}>Practice ready</Text>
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Add a new word</Text>
         <Text style={styles.helperText}>
-          Type a word. Suggestions help when you are not sure about spelling.
+          {selectedSet
+            ? `New words will be added to the "${selectedSet.name}" set.`
+            : "Select a set above if you want the word to go into a specific set."}
         </Text>
 
         <TextInput
@@ -454,31 +696,36 @@ export default function HomeScreen() {
 
       <View style={styles.card}>
         <View style={styles.wordsHeader}>
-          <Text style={styles.sectionTitle}>Your vocabulary</Text>
+          <Text style={styles.sectionTitle}>
+            {selectedSet ? selectedSet.name : "Your vocabulary"}
+          </Text>
 
-          <Pressable onPress={loadWords} disabled={wordsLoading}>
+          <Pressable onPress={refreshAll} disabled={wordsLoading || setsLoading}>
             <Text style={styles.refreshText}>
-              {wordsLoading ? "Loading..." : "Refresh"}
+              {wordsLoading || setsLoading ? "Loading..." : "Refresh"}
             </Text>
           </Pressable>
         </View>
 
-        {wordsLoading && words.length === 0 ? (
+        {wordsLoading && visibleWords.length === 0 ? (
           <View style={styles.emptyState}>
             <ActivityIndicator />
             <Text style={styles.emptyStateText}>Loading your words...</Text>
           </View>
-        ) : words.length === 0 ? (
+        ) : visibleWords.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>No words yet</Text>
+            <Text style={styles.emptyStateTitle}>
+              {selectedSet ? "This set is empty" : "No words yet"}
+            </Text>
             <Text style={styles.emptyStateText}>
-              Add your first word. Next step will be creating sets like TOEFL,
-              Daily English, and My Mistakes.
+              {selectedSet
+                ? "Add a word while this set is selected."
+                : "Create a set like TOEFL, then add your first word."}
             </Text>
           </View>
         ) : (
           <View style={styles.wordList}>
-            {words.map((item) => {
+            {visibleWords.map((item) => {
               const aiReady = hasAiContent(item);
 
               return (
@@ -556,6 +803,42 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+  },
+  setList: {
+    gap: 10,
+    paddingBottom: 12,
+  },
+  setChip: {
+    minWidth: 130,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 18,
+    padding: 14,
+  },
+  activeSetChip: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+  },
+  setChipTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0f172a",
+    marginBottom: 5,
+  },
+  activeSetChipTitle: {
+    color: "#ffffff",
+  },
+  setChipMeta: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+  },
+  activeSetChipMeta: {
+    color: "#dbeafe",
+  },
+  createSetBox: {
+    marginTop: 4,
   },
   practiceCard: {
     backgroundColor: "#2563eb",
