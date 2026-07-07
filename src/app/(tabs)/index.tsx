@@ -100,11 +100,8 @@ export default function HomeScreen() {
   const [setsLoading, setSetsLoading] = useState(false);
   const [addingWord, setAddingWord] = useState(false);
   const [addingWordWithAi, setAddingWordWithAi] = useState(false);
-  const [creatingSet, setCreatingSet] = useState(false);
 
   const [word, setWord] = useState("");
-  const [newSetName, setNewSetName] = useState("");
-  const [editingSetName, setEditingSetName] = useState("");
 
   const [words, setWords] = useState<UserWord[]>([]);
   const [sets, setSets] = useState<WordSet[]>([]);
@@ -268,81 +265,6 @@ export default function HomeScreen() {
     if (error) {
       Alert.alert("Sign out failed", error.message);
     }
-  }
-
-  async function handleCreateSet() {
-    const cleanName = newSetName.trim();
-
-    if (!cleanName) {
-      Alert.alert("Missing set name", "Please enter a name like TOEFL or Daily English.");
-      return;
-    }
-
-    setCreatingSet(true);
-
-    const { data, error } = await supabase
-      .from("word_sets")
-      .insert({
-        name: cleanName,
-      })
-      .select("id, name, description, created_at")
-      .single();
-
-    setCreatingSet(false);
-
-    if (error) {
-      Alert.alert("Could not create set", error.message);
-      return;
-    }
-
-    setNewSetName("");
-    setSelectedSetId(data.id);
-    await loadSets();
-  }
-
-  async function handleRenameSelectedSet() {
-    if (!selectedSet) return;
-
-    const cleanName = editingSetName.trim();
-
-    if (!cleanName) {
-      Alert.alert("Missing set name", "Set name cannot be empty.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("word_sets")
-      .update({
-        name: cleanName,
-      })
-      .eq("id", selectedSet.id);
-
-    if (error) {
-      Alert.alert("Could not rename set", error.message);
-      return;
-    }
-
-    await loadSets();
-  }
-
-  function confirmDeleteSelectedSet() {
-    if (!selectedSet) return;
-
-    Alert.alert(
-      "Delete set?",
-      `This will delete the "${selectedSet.name}" set. Your words will stay in Library.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete set",
-          style: "destructive",
-          onPress: deleteSelectedSet,
-        },
-      ]
-    );
   }
 
   async function deleteSelectedSet() {
@@ -645,10 +567,6 @@ export default function HomeScreen() {
 
   const selectedSet = sets.find((set) => set.id === selectedSetId) ?? null;
 
-  useEffect(() => {
-    setEditingSetName(selectedSet?.name ?? "");
-  }, [selectedSet?.id, selectedSet?.name]);
-
   const visibleWords = useMemo(() => {
     return getWordsForSet(selectedSetId);
   }, [words, setItems, selectedSetId]);
@@ -852,51 +770,16 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
-        {selectedSet ? (
-          <View style={styles.manageSetBox}>
-            <Text style={styles.manageSetTitle}>Manage selected set</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Set name"
-              value={editingSetName}
-              onChangeText={setEditingSetName}
-              onSubmitEditing={handleRenameSelectedSet}
-            />
-
-            <View style={styles.setManageActions}>
-              <Pressable style={styles.smallButton} onPress={handleRenameSelectedSet}>
-                <Text style={styles.smallButtonText}>Rename</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.smallDangerButton}
-                onPress={confirmDeleteSelectedSet}
-              >
-                <Text style={styles.smallDangerButtonText}>Delete set</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.createSetBox}>
-          <TextInput
-            style={styles.input}
-            placeholder="Create a set: TOEFL, Daily English..."
-            value={newSetName}
-            onChangeText={setNewSetName}
-            editable={!creatingSet}
-            onSubmitEditing={handleCreateSet}
-          />
+        <View style={styles.setManagementHint}>
+          <Text style={styles.setManagementHintText}>
+            Create, rename, and delete sets from the Sets tab.
+          </Text>
 
           <Pressable
-            style={[styles.button, creatingSet && styles.disabledButton]}
-            onPress={handleCreateSet}
-            disabled={creatingSet}
+            style={styles.setManagementHintButton}
+            onPress={() => router.push("/sets" as never)}
           >
-            <Text style={styles.buttonText}>
-              {creatingSet ? "Creating..." : "Create set"}
-            </Text>
+            <Text style={styles.setManagementHintButtonText}>Open Sets</Text>
           </Pressable>
         </View>
       </View>
@@ -1229,52 +1112,32 @@ const styles = StyleSheet.create({
   activeSetChipMeta: {
     color: "#dbeafe",
   },
-  createSetBox: {
+  setManagementHint: {
     marginTop: 4,
-  },
-  manageSetBox: {
+    padding: 14,
+    borderRadius: 16,
     backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
-  },
-  manageSetTitle: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 10,
-  },
-  setManageActions: {
-    flexDirection: "row",
     gap: 10,
   },
-  smallButton: {
-    flex: 1,
-    backgroundColor: "#2563eb",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  smallButtonText: {
-    color: "#ffffff",
+  setManagementHintText: {
     fontSize: 14,
-    fontWeight: "900",
+    lineHeight: 20,
+    color: "#64748b",
+    fontWeight: "700",
   },
-  smallDangerButton: {
-    flex: 1,
-    backgroundColor: "#fef2f2",
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
+  setManagementHintButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#e0f2fe",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  smallDangerButtonText: {
-    color: "#991b1b",
-    fontSize: 14,
+  setManagementHintButtonText: {
+    fontSize: 13,
     fontWeight: "900",
+    color: "#0369a1",
   },
   practiceCard: {
     backgroundColor: "#2563eb",
