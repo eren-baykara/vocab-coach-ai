@@ -839,7 +839,7 @@ export default function HomeScreen() {
             description="See the word, choose the Turkish meaning."
             readyCount={meaningDueCount}
             totalReadyCount={meaningReadyCount}
-            disabled={meaningDueCount === 0}
+            disabled={meaningReadyCount === 0}
             disabledReason={
               visibleWords.length === 0
                 ? "Add words first."
@@ -866,7 +866,7 @@ export default function HomeScreen() {
             description="See the meaning, choose the word."
             readyCount={reverseDueCount}
             totalReadyCount={reverseReadyCount}
-            disabled={reverseDueCount === 0}
+            disabled={reverseReadyCount === 0}
             disabledReason={
               visibleWords.length === 0
                 ? "Add words first."
@@ -893,7 +893,7 @@ export default function HomeScreen() {
             description="Complete an example sentence."
             readyCount={fillDueCount}
             totalReadyCount={fillReadyCount}
-            disabled={fillDueCount === 0}
+            disabled={fillReadyCount === 0}
             disabledReason={
               visibleWords.length === 0
                 ? "Add words first."
@@ -1104,7 +1104,9 @@ function PracticeModeButton({
         <Text style={styles.practiceModeDescription}>
           {disabled
             ? disabledReason
-            : `${readyCount} due now • ${totalReadyCount} ready`}
+            : readyCount > 0
+              ? `${readyCount} due now • ${totalReadyCount} ready`
+              : `Practice anytime • ${totalReadyCount} ready`}
         </Text>
       </View>
 
