@@ -180,10 +180,10 @@ export default function CardSortScreen() {
     setRevealed(false);
   }
 
-  async function createLearningSet() {
+  async function createStillLearningSet() {
     const cleanName = newSetName.trim();
 
-    if (!cleanName || learningWordIds.length === 0) return;
+    if (!cleanName || learningWordIds.length === 0) return null;
 
     setCreatingSet(true);
 
@@ -198,7 +198,7 @@ export default function CardSortScreen() {
     if (setError) {
       setCreatingSet(false);
       Alert.alert("Could not create set", setError.message);
-      return;
+      return null;
     }
 
     const rows = learningWordIds.map((wordId) => ({
@@ -212,15 +212,38 @@ export default function CardSortScreen() {
 
     if (itemsError) {
       Alert.alert("Set created, but words could not be added", itemsError.message);
-      return;
+      return null;
     }
+
+    return setData as { id: string; name: string };
+  }
+
+  async function createLearningSet() {
+    const createdSet = await createStillLearningSet();
+
+    if (!createdSet) return;
 
     Alert.alert(
       "Set created",
-      `"${cleanName}" now has ${learningWordIds.length} word${
+      `"${createdSet.name}" now has ${learningWordIds.length} word${
         learningWordIds.length === 1 ? "" : "s"
       }.`
     );
+  }
+
+  async function createLearningSetAndPractice() {
+    const createdSet = await createStillLearningSet();
+
+    if (!createdSet) return;
+
+    router.replace({
+      pathname: "/review",
+      params: {
+        setId: createdSet.id,
+        setName: createdSet.name,
+        mode: "meaning",
+      },
+    });
   }
 
   if (loading) {
@@ -306,6 +329,19 @@ export default function CardSortScreen() {
             >
               <Text style={styles.buttonText}>
                 {creatingSet ? "Creating..." : "Create Still Learning set"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.secondaryButton,
+                (!canCreateLearningSet || creatingSet) && styles.disabledButton,
+              ]}
+              onPress={createLearningSetAndPractice}
+              disabled={!canCreateLearningSet || creatingSet}
+            >
+              <Text style={styles.secondaryButtonText}>
+                Create set and practice
               </Text>
             </Pressable>
           </View>
@@ -727,6 +763,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   secondaryButton: {
+    marginTop: 10,
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 16,
