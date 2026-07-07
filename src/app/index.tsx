@@ -1242,7 +1242,9 @@ function PracticeModeButton({
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 72,
+    paddingBottom: 32,
     backgroundColor: "#f8fafc",
   },
   centeredContainer: {
@@ -1257,8 +1259,8 @@ const styles = StyleSheet.create({
     color: "#475569",
   },
   header: {
-    marginBottom: 20,
-    gap: 16,
+    marginBottom: 18,
+    gap: 14,
   },
   card: {
     backgroundColor: "#ffffff",
@@ -1273,7 +1275,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   setChip: {
-    minWidth: 190,
+    minWidth: 210,
     backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#e2e8f0",
@@ -1352,7 +1354,7 @@ const styles = StyleSheet.create({
   practiceCard: {
     backgroundColor: "#2563eb",
     borderRadius: 28,
-    padding: 24,
+    padding: 22,
     marginBottom: 20,
   },
   practiceEyebrow: {
