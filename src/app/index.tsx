@@ -852,19 +852,14 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.modeList}>
-          <PracticeModeButton
-            title="Card Sort"
-            description="Quickly separate known words from words you still need."
-            readyCount={visibleWords.length}
-            totalReadyCount={visibleWords.length}
-            footerText={
-              visibleWords.length > 0
-                ? `${visibleWords.length} cards available`
-                : "Add words first."
-            }
-            disabled={visibleWords.length === 0}
-            disabledReason="Add words first."
+        <View style={styles.studyBlock}>
+          <Text style={styles.studyLabel}>Study flow</Text>
+
+          <Pressable
+            style={[
+              styles.primaryStudyButton,
+              visibleWords.length === 0 && styles.disabledButton,
+            ]}
             onPress={() =>
               router.push({
                 pathname: "/card-sort" as never,
@@ -876,8 +871,27 @@ export default function HomeScreen() {
                   : {},
               })
             }
-          />
+            disabled={visibleWords.length === 0}
+          >
+            <View style={styles.practiceModeTextWrap}>
+              <Text style={styles.primaryStudyTitle}>Card Sort</Text>
+              <Text style={styles.primaryStudyDescription}>
+                First, separate known words from words you still need.
+              </Text>
+              <Text style={styles.primaryStudyMeta}>
+                {visibleWords.length > 0
+                  ? `${visibleWords.length} cards available`
+                  : "Add words first."}
+              </Text>
+            </View>
 
+            <Text style={styles.primaryStudyChevron}>›</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.practiceModesHeading}>Practice modes</Text>
+
+        <View style={styles.modeList}>
           <PracticeModeButton
             title="Meaning Quiz"
             description="See the word, choose the Turkish meaning."
@@ -1334,6 +1348,58 @@ const styles = StyleSheet.create({
   },
   modeList: {
     gap: 10,
+  },
+  studyBlock: {
+    marginTop: 18,
+    marginBottom: 18,
+  },
+  studyLabel: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#1e40af",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: 10,
+  },
+  primaryStudyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  primaryStudyTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#1e3a8a",
+    marginBottom: 6,
+  },
+  primaryStudyDescription: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#1e40af",
+    fontWeight: "700",
+  },
+  primaryStudyMeta: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#2563eb",
+  },
+  primaryStudyChevron: {
+    fontSize: 34,
+    fontWeight: "900",
+    color: "#2563eb",
+  },
+  practiceModesHeading: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0f172a",
+    marginBottom: 10,
   },
   practiceModeButton: {
     backgroundColor: "#ffffff",
