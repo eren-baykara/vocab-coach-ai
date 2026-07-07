@@ -292,6 +292,20 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <View style={styles.reviewCard}>
+        <Text style={styles.reviewTitle}>Ready to practice?</Text>
+        <Text style={styles.reviewText}>
+          Review due words and update your memory status.
+        </Text>
+
+        <Pressable
+          style={styles.reviewButton}
+          onPress={() => router.push("/review")}
+        >
+          <Text style={styles.reviewButtonText}>Start review</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Add a new word</Text>
 
@@ -609,5 +623,36 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 30,
     color: "#94a3b8",
+  },
+  reviewCard: {
+    backgroundColor: "#eff6ff",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  reviewTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#1e3a8a",
+    marginBottom: 8,
+  },
+  reviewText: {
+    fontSize: 15,
+    color: "#1e40af",
+    lineHeight: 22,
+    marginBottom: 14,
+  },
+  reviewButton: {
+    backgroundColor: "#2563eb",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  reviewButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });
