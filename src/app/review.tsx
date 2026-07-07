@@ -309,7 +309,7 @@ export default function ReviewScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Choose the answer</Text>
+        <Text style={styles.sectionTitle}>{getChoiceSectionTitle(question.mode)}</Text>
 
         <View style={styles.optionList}>
           {question.options.map((option) => {
@@ -422,6 +422,13 @@ function getModeTitle(mode: PracticeMode) {
   return "Meaning Quiz";
 }
 
+function getChoiceSectionTitle(mode: PracticeMode) {
+  if (mode === "reverse") return "Choose the word";
+  if (mode === "fill") return "Choose the missing word";
+
+  return "Choose the meaning";
+}
+
 function getContent(item: ReviewWord) {
   return Array.isArray(item.word_contents)
     ? item.word_contents[0]
@@ -442,6 +449,12 @@ function getMeaning(item: ReviewWord) {
     content?.simple_definition ||
     "Meaning has not been generated yet."
   );
+}
+
+function getTurkishMeaning(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.turkish_meaning ?? "";
 }
 
 function getSimpleMeaning(item: ReviewWord) {
@@ -505,17 +518,22 @@ function hasUsableContent(item: ReviewWord, mode: PracticeMode) {
 
   if (!content?.display_word) return false;
 
-  const hasMeaning = Boolean(content.turkish_meaning || content.simple_definition);
+  const hasTurkishMeaning = Boolean(content.turkish_meaning);
+  const hasAnyMeaning = Boolean(content.turkish_meaning || content.simple_definition);
+
+  if (mode === "meaning") {
+    return hasTurkishMeaning;
+  }
 
   if (mode === "fill") {
-    return hasMeaning && Boolean(
+    return hasAnyMeaning && Boolean(
       content.fill_blank_sentence ||
         content.daily_life_example ||
         content.toefl_example
     );
   }
 
-  return hasMeaning;
+  return hasAnyMeaning;
 }
 
 function isDue(item: ReviewWord) {
@@ -544,16 +562,18 @@ function buildMeaningQuestion(
   currentWord: ReviewWord,
   allWords: ReviewWord[]
 ): QuizQuestion {
-  const fullMeaning = getMeaning(currentWord);
+  const fullMeaning = getTurkishMeaning(currentWord) || getMeaning(currentWord);
   const correctAnswer = cleanMeaningChoice(fullMeaning);
 
   const otherMeanings = allWords
     .filter((item) => item.id !== currentWord.id)
-    .map((item) => cleanMeaningChoice(getMeaning(item)))
-    .filter((item) => item.length > 0)
+    .map((item) => cleanMeaningChoice(getTurkishMeaning(item)))
+    .filter((item) => isUsableShortChoice(item, 6, 48))
     .filter((item) => item !== correctAnswer);
 
-  const aiDistractors = getMeaningDistractors(currentWord).map(cleanMeaningChoice);
+  const aiDistractors = getMeaningDistractors(currentWord)
+    .map(cleanMeaningChoice)
+    .filter((item) => isUsableShortChoice(item, 6, 48));
 
   const options = buildStableOptions(
     [correctAnswer, ...aiDistractors, ...otherMeanings, ...FALLBACK_MEANINGS],
@@ -574,10 +594,12 @@ function buildMeaningQuestion(
 }
 
 function cleanMeaningChoice(value: string) {
-  return value
+  return normalizeOptionText(value)
     .replace(/\s*\([^)]*\)/g, "")
-    .split(";")[0]
-    .replace(/\s+/g, " ")
+    .replace(/\s*\[[^\]]*\]/g, "")
+    .split(/[;\n]/)[0]
+    .replace(/[“”"]/g, "")
+    .replace(/[.!?]+$/g, "")
     .trim();
 }
 
@@ -585,15 +607,17 @@ function buildReverseQuestion(
   currentWord: ReviewWord,
   allWords: ReviewWord[]
 ): QuizQuestion {
-  const correctAnswer = getWord(currentWord);
+  const correctAnswer = cleanWordChoice(getWord(currentWord));
 
   const otherWords = allWords
     .filter((item) => item.id !== currentWord.id)
-    .map(getWord)
-    .filter((item) => item.length > 0)
+    .map((item) => cleanWordChoice(getWord(item)))
+    .filter((item) => isUsableShortChoice(item, 4, 36))
     .filter((item) => item !== correctAnswer);
 
-  const aiDistractors = getWordDistractors(currentWord);
+  const aiDistractors = getWordDistractors(currentWord)
+    .map(cleanWordChoice)
+    .filter((item) => isUsableShortChoice(item, 4, 36));
 
   const options = buildStableOptions(
     [correctAnswer, ...aiDistractors, ...otherWords, ...FALLBACK_WORDS],
@@ -617,17 +641,19 @@ function buildFillQuestion(
   currentWord: ReviewWord,
   allWords: ReviewWord[]
 ): QuizQuestion {
-  const correctAnswer = getFillBlankAnswer(currentWord);
+  const correctAnswer = cleanWordChoice(getFillBlankAnswer(currentWord));
   const example = getFillBlankSentence(currentWord);
   const blankedExample = createBlankedExample(example, correctAnswer);
 
   const otherWords = allWords
     .filter((item) => item.id !== currentWord.id)
-    .map(getWord)
-    .filter((item) => item.length > 0)
+    .map((item) => cleanWordChoice(getWord(item)))
+    .filter((item) => isUsableShortChoice(item, 4, 36))
     .filter((item) => item !== correctAnswer);
 
-  const aiDistractors = getWordDistractors(currentWord);
+  const aiDistractors = getWordDistractors(currentWord)
+    .map(cleanWordChoice)
+    .filter((item) => isUsableShortChoice(item, 4, 36));
 
   const options = buildStableOptions(
     [correctAnswer, ...aiDistractors, ...otherWords, ...FALLBACK_WORDS],
@@ -658,12 +684,47 @@ function createBlankedExample(example: string, word: string) {
   return `${example}\n\nMissing word: _____`;
 }
 
-function buildStableOptions(values: string[], seed: string) {
-  const uniqueValues = Array.from(
-    new Set(values.map((item) => item.trim()).filter((item) => item.length > 0))
-  ).slice(0, 4);
+function cleanWordChoice(value: string) {
+  return normalizeOptionText(value)
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/\s*\[[^\]]*\]/g, "")
+    .split(/[;,\n]/)[0]
+    .replace(/[“”"]/g, "")
+    .trim();
+}
 
-  return sortOptionsStable(uniqueValues, seed);
+function normalizeOptionText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function isUsableShortChoice(value: string, maxWords: number, maxChars: number) {
+  const cleaned = normalizeOptionText(value);
+
+  if (cleaned.length < 2) return false;
+  if (cleaned.length > maxChars) return false;
+  if (cleaned.split(" ").length > maxWords) return false;
+  if (/[{}\[\]<>]/.test(cleaned)) return false;
+
+  return true;
+}
+
+function buildStableOptions(values: string[], seed: string) {
+  const uniqueValues: string[] = [];
+  const seenValues = new Set<string>();
+
+  values.forEach((value) => {
+    const cleanValue = normalizeOptionText(value);
+    const valueKey = cleanValue.toLowerCase();
+
+    if (!cleanValue || seenValues.has(valueKey)) {
+      return;
+    }
+
+    seenValues.add(valueKey);
+    uniqueValues.push(cleanValue);
+  });
+
+  return sortOptionsStable(uniqueValues.slice(0, 4), seed);
 }
 
 function sortOptionsStable(options: string[], seed: string) {
