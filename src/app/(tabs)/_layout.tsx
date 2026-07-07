@@ -1,11 +1,39 @@
 import { Tabs } from "expo-router";
-import { Text, type ColorValue } from "react-native";
+import { Text, View, type ColorValue } from "react-native";
 
-function TabIcon({ icon, color }: { icon: string; color: ColorValue }) {
+import { theme } from "../../theme";
+
+function TabIcon({
+  icon,
+  color,
+  focused,
+}: {
+  icon: string;
+  color: ColorValue;
+  focused: boolean;
+}) {
   return (
-    <Text style={{ color, fontSize: 20, fontWeight: "900" }}>
-      {icon}
-    </Text>
+    <View
+      style={{
+        width: 32,
+        height: 28,
+        borderRadius: theme.radius.pill,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: focused ? theme.colors.primarySurface : "transparent",
+      }}
+    >
+      <Text
+        style={{
+          color,
+          fontSize: 17,
+          fontWeight: "900",
+          lineHeight: 20,
+        }}
+      >
+        {icon}
+      </Text>
+    </View>
   );
 }
 
@@ -14,19 +42,20 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#2563eb",
-        tabBarInactiveTintColor: "#94a3b8",
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textSubtle,
         tabBarStyle: {
-          height: 78,
+          height: 80,
           paddingTop: 8,
           paddingBottom: 12,
-          backgroundColor: "#ffffff",
+          backgroundColor: theme.colors.surface,
           borderTopWidth: 1,
-          borderTopColor: "#e2e8f0",
+          borderTopColor: theme.colors.border,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: "800",
+          fontWeight: "900",
+          marginTop: 2,
         },
       }}
     >
@@ -34,7 +63,9 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Today",
-          tabBarIcon: ({ color }) => <TabIcon icon="●" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon icon="●" color={color} focused={focused} />
+          ),
         }}
       />
 
@@ -42,15 +73,19 @@ export default function TabLayout() {
         name="sets"
         options={{
           title: "Sets",
-          tabBarIcon: ({ color }) => <TabIcon icon="◆" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon icon="◆" color={color} focused={focused} />
+          ),
         }}
       />
 
       <Tabs.Screen
         name="library"
         options={{
-          title: "Library",
-          tabBarIcon: ({ color }) => <TabIcon icon="■" color={color} />,
+          title: "Words",
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon icon="■" color={color} focused={focused} />
+          ),
         }}
       />
     </Tabs>
