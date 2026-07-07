@@ -521,25 +521,49 @@ function formatReviewDate(value: string | null) {
         </View>
       </View>
 
-      <View style={styles.meaningCard}>
-        <Text style={styles.meaningLabel}>Anlam</Text>
-        <Text style={styles.meaningText}>{getPrimaryMeaning(content)}</Text>
+      {!aiReady ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>AI içeriği gerekli</Text>
+          <Text style={styles.helperText}>
+            Bu kelime Meaning Quiz, Reverse Quiz ve Fill in the Blank içinde
+            kullanılmadan önce AI içeriği üret.
+          </Text>
 
-        <View style={styles.simpleBlock}>
-          <Text style={styles.simpleLabel}>Basit anlam</Text>
-          <Text style={styles.simpleText}>{getShortDefinition(content)}</Text>
-        </View>
+          <Text style={styles.warningText}>
+            AI içeriği anlamları, örnek cümleleri ve pratik seçeneklerini hazırlar.
+          </Text>
 
-        <View style={styles.simpleBlock}>
-          <Text style={styles.simpleLabel}>Örnek cümle</Text>
-          <Text style={styles.simpleText}>{getExample(content)}</Text>
+          <Pressable
+            style={[styles.button, generatingAi && styles.disabledButton]}
+            onPress={generateAiLesson}
+            disabled={generatingAi}
+          >
+            <Text style={styles.buttonText}>
+              {generatingAi ? "Generating..." : "AI üret"}
+            </Text>
+          </Pressable>
         </View>
+      ) : (
+        <View style={styles.meaningCard}>
+          <Text style={styles.meaningLabel}>Anlam</Text>
+          <Text style={styles.meaningText}>{getPrimaryMeaning(content)}</Text>
 
-        <View style={styles.simpleBlock}>
-          <Text style={styles.simpleLabel}>Türkçe çeviri</Text>
-          <Text style={styles.simpleText}>{getExampleTr(content)}</Text>
+          <View style={styles.simpleBlock}>
+            <Text style={styles.simpleLabel}>Basit anlam</Text>
+            <Text style={styles.simpleText}>{getShortDefinition(content)}</Text>
+          </View>
+
+          <View style={styles.simpleBlock}>
+            <Text style={styles.simpleLabel}>Örnek cümle</Text>
+            <Text style={styles.simpleText}>{getExample(content)}</Text>
+          </View>
+
+          <View style={styles.simpleBlock}>
+            <Text style={styles.simpleLabel}>Türkçe çeviri</Text>
+            <Text style={styles.simpleText}>{getExampleTr(content)}</Text>
+          </View>
         </View>
-</View>
+      )}
 
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>
@@ -670,35 +694,17 @@ function formatReviewDate(value: string | null) {
         </Pressable>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>AI içeriği</Text>
+      {aiReady ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>AI içeriği</Text>
 
-        <Text style={styles.helperText}>
-          AI içeriği anlamları, örnekleri, quizleri ve pratik ekranlarını besler.
-        </Text>
-
-        {aiReady ? (
-          <Text style={styles.successText}>AI içeriği hazır.</Text>
-        ) : (
-          <Text style={styles.warningText}>
-            Gelişmiş pratikten önce AI içeriği üret.
+          <Text style={styles.helperText}>
+            AI içeriği hazır. Bu kelime practice modlarında kullanılabilir.
           </Text>
-        )}
 
-        <Pressable
-          style={[styles.button, generatingAi && styles.disabledButton]}
-          onPress={generateAiLesson}
-          disabled={generatingAi}
-        >
-          <Text style={styles.buttonText}>
-            {generatingAi
-              ? "Generating..."
-              : aiReady
-                ? "AI içeriğini kontrol et"
-                : "AI üret"}
-          </Text>
-        </Pressable>
-      </View>
+          <Text style={styles.successText}>Practice ready.</Text>
+        </View>
+      ) : null}
 
       <View style={styles.dangerCard}>
         <Text style={styles.dangerTitle}>Library’den çıkar</Text>
