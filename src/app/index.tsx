@@ -592,10 +592,10 @@ export default function HomeScreen() {
         <Text style={styles.practiceEyebrow}>
           {selectedSet ? selectedSet.name : "All words"}
         </Text>
-        <Text style={styles.practiceTitle}>Meaning Quiz</Text>
+        <Text style={styles.practiceTitle}>Practice modes</Text>
         <Text style={styles.practiceText}>
           Practice {selectedSet ? "this set" : "your whole vocabulary"} with
-          multiple-choice meaning questions.
+          focused quiz modes.
         </Text>
 
         <View style={styles.practiceStatsRow}>
@@ -610,25 +610,61 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Pressable
-          style={[
-            styles.practiceButton,
-            aiReadyCount === 0 && styles.disabledButton,
-          ]}
-          onPress={() =>
-            router.push({
-              pathname: "/review",
-              params: selectedSet
-                ? { setId: selectedSet.id, setName: selectedSet.name }
-                : {},
-            })
-          }
-          disabled={aiReadyCount === 0}
-        >
-          <Text style={styles.practiceButtonText}>
-            {aiReadyCount === 0 ? "Generate AI first" : "Start practice"}
-          </Text>
-        </Pressable>
+        <View style={styles.modeList}>
+          <PracticeModeButton
+            title="Meaning Quiz"
+            description="See the word, choose the meaning."
+            disabled={aiReadyCount === 0}
+            onPress={() =>
+              router.push({
+                pathname: "/review",
+                params: selectedSet
+                  ? {
+                      setId: selectedSet.id,
+                      setName: selectedSet.name,
+                      mode: "meaning",
+                    }
+                  : { mode: "meaning" },
+              })
+            }
+          />
+
+          <PracticeModeButton
+            title="Reverse Quiz"
+            description="See the meaning, choose the word."
+            disabled={aiReadyCount === 0}
+            onPress={() =>
+              router.push({
+                pathname: "/review",
+                params: selectedSet
+                  ? {
+                      setId: selectedSet.id,
+                      setName: selectedSet.name,
+                      mode: "reverse",
+                    }
+                  : { mode: "reverse" },
+              })
+            }
+          />
+
+          <PracticeModeButton
+            title="Fill in the Blank"
+            description="Complete an example sentence."
+            disabled={aiReadyCount === 0}
+            onPress={() =>
+              router.push({
+                pathname: "/review",
+                params: selectedSet
+                  ? {
+                      setId: selectedSet.id,
+                      setName: selectedSet.name,
+                      mode: "fill",
+                    }
+                  : { mode: "fill" },
+              })
+            }
+          />
+        </View>
       </View>
 
       <View style={styles.statsCard}>
@@ -775,6 +811,35 @@ export default function HomeScreen() {
   );
 }
 
+type PracticeModeButtonProps = {
+  title: string;
+  description: string;
+  disabled: boolean;
+  onPress: () => void;
+};
+
+function PracticeModeButton({
+  title,
+  description,
+  disabled,
+  onPress,
+}: PracticeModeButtonProps) {
+  return (
+    <Pressable
+      style={[styles.practiceModeButton, disabled && styles.disabledButton]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <View style={styles.practiceModeTextWrap}>
+        <Text style={styles.practiceModeTitle}>{title}</Text>
+        <Text style={styles.practiceModeDescription}>{description}</Text>
+      </View>
+
+      <Text style={styles.practiceModeChevron}>›</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -898,6 +963,38 @@ const styles = StyleSheet.create({
     color: "#1d4ed8",
     fontSize: 16,
     fontWeight: "900",
+  },
+  modeList: {
+    gap: 10,
+  },
+  practiceModeButton: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  practiceModeTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  practiceModeTitle: {
+    color: "#1d4ed8",
+    fontSize: 17,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  practiceModeDescription: {
+    color: "#475569",
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  practiceModeChevron: {
+    color: "#93c5fd",
+    fontSize: 30,
+    fontWeight: "700",
   },
   statsCard: {
     backgroundColor: "#ffffff",

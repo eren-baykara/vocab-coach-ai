@@ -12,6 +12,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 
 import { supabase } from "../lib/supabase";
 
+type PracticeMode = "meaning" | "reverse" | "fill";
 type ReviewRating = "again" | "good";
 
 type WordContent = {
@@ -38,8 +39,11 @@ type ReviewWord = {
 };
 
 type QuizQuestion = {
-  word: string;
+  mode: PracticeMode;
+  title: string;
+  prompt: string;
   correctAnswer: string;
+  meaning: string;
   simpleMeaning: string;
   example: string;
   options: string[];
@@ -77,10 +81,29 @@ const FALLBACK_MEANINGS = [
   "artmak",
 ];
 
+const FALLBACK_WORDS = [
+  "usually",
+  "improve",
+  "compare",
+  "support",
+  "explain",
+  "increase",
+  "reduce",
+  "develop",
+];
+
 export default function ReviewScreen() {
-  const params = useLocalSearchParams<{ setId?: string; setName?: string }>();
+  const params = useLocalSearchParams<{
+    setId?: string;
+    setName?: string;
+    mode?: string;
+  }>();
+
   const selectedSetId = typeof params.setId === "string" ? params.setId : null;
-  const selectedSetName = typeof params.setName === "string" ? params.setName : null;
+  const selectedSetName =
+    typeof params.setName === "string" ? params.setName : null;
+
+  const practiceMode = normalizePracticeMode(params.mode);
 
   const [loading, setLoading] = useState(true);
   const [savingResult, setSavingResult] = useState(false);
@@ -107,7 +130,9 @@ export default function ReviewScreen() {
       return;
     }
 
-    let typedWords = ((data ?? []) as ReviewWord[]).filter(hasUsableMeaning);
+    let typedWords = ((data ?? []) as ReviewWord[]).filter((item) =>
+      hasUsableContent(item, practiceMode)
+    );
 
     if (selectedSetId) {
       const { data: setItemsData, error: setItemsError } = await supabase
@@ -139,7 +164,7 @@ export default function ReviewScreen() {
     setSelectedAnswer(null);
     setLastWasCorrect(null);
     setLoading(false);
-  }, [selectedSetId]);
+  }, [selectedSetId, practiceMode]);
 
   useEffect(() => {
     loadPracticeWords();
@@ -198,8 +223,10 @@ export default function ReviewScreen() {
   const question = useMemo(() => {
     if (!currentWord) return null;
 
-    return buildQuizQuestion(currentWord, allWords);
-  }, [currentWord, allWords]);
+    return buildQuizQuestion(currentWord, allWords, practiceMode);
+  }, [currentWord, allWords, practiceMode]);
+
+  const modeTitle = getModeTitle(practiceMode);
 
   const progressText =
     initialCount > 0
@@ -209,7 +236,7 @@ export default function ReviewScreen() {
   if (loading) {
     return (
       <View style={styles.centeredContainer}>
-        <Stack.Screen options={{ title: "Practice" }} />
+        <Stack.Screen options={{ title: modeTitle }} />
         <ActivityIndicator />
         <Text style={styles.loadingText}>Loading practice...</Text>
       </View>
@@ -221,7 +248,7 @@ export default function ReviewScreen() {
 
     return (
       <View style={styles.centeredContainer}>
-        <Stack.Screen options={{ title: "Practice" }} />
+        <Stack.Screen options={{ title: modeTitle }} />
 
         <Text style={styles.emptyTitle}>
           {completedSomething ? "Practice complete" : "No practice words yet"}
@@ -248,7 +275,7 @@ export default function ReviewScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Practice" }} />
+      <Stack.Screen options={{ title: modeTitle }} />
 
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backButtonText}>‹ Back</Text>
@@ -261,13 +288,13 @@ export default function ReviewScreen() {
       </View>
 
       <View style={styles.quizCard}>
-        <Text style={styles.quizEyebrow}>Meaning quiz</Text>
-        <Text style={styles.questionText}>What does this word mean?</Text>
-        <Text style={styles.wordTitle}>{question.word}</Text>
+        <Text style={styles.quizEyebrow}>{modeTitle}</Text>
+        <Text style={styles.questionText}>{question.prompt}</Text>
+        <Text style={styles.wordTitle}>{question.title}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Choose the meaning</Text>
+        <Text style={styles.sectionTitle}>Choose the answer</Text>
 
         <View style={styles.optionList}>
           {question.options.map((option) => {
@@ -332,8 +359,13 @@ export default function ReviewScreen() {
             </Text>
 
             <Text style={styles.resultMeaning}>
-              {question.word} = {question.correctAnswer}
+              Correct answer: {question.correctAnswer}
             </Text>
+
+            <View style={styles.resultBlock}>
+              <Text style={styles.resultLabel}>Anlam</Text>
+              <Text style={styles.resultText}>{question.meaning}</Text>
+            </View>
 
             <View style={styles.resultBlock}>
               <Text style={styles.resultLabel}>Basit anlam</Text>
@@ -355,12 +387,71 @@ export default function ReviewScreen() {
   );
 }
 
-function hasUsableMeaning(item: ReviewWord) {
-  const content = Array.isArray(item.word_contents)
+function normalizePracticeMode(value: string | string[] | undefined): PracticeMode {
+  if (value === "reverse" || value === "fill" || value === "meaning") {
+    return value;
+  }
+
+  return "meaning";
+}
+
+function getModeTitle(mode: PracticeMode) {
+  if (mode === "reverse") return "Reverse Quiz";
+  if (mode === "fill") return "Fill in the Blank";
+
+  return "Meaning Quiz";
+}
+
+function getContent(item: ReviewWord) {
+  return Array.isArray(item.word_contents)
     ? item.word_contents[0]
     : item.word_contents;
+}
 
-  return Boolean(content?.turkish_meaning || content?.simple_definition);
+function getWord(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.display_word || "Untitled word";
+}
+
+function getMeaning(item: ReviewWord) {
+  const content = getContent(item);
+
+  return (
+    content?.turkish_meaning ||
+    content?.simple_definition ||
+    "Meaning has not been generated yet."
+  );
+}
+
+function getSimpleMeaning(item: ReviewWord) {
+  const content = getContent(item);
+
+  return content?.simple_definition || "Simple meaning has not been generated yet.";
+}
+
+function getExample(item: ReviewWord) {
+  const content = getContent(item);
+
+  return (
+    content?.daily_life_example ||
+    content?.toefl_example ||
+    "Example sentence has not been generated yet."
+  );
+}
+
+function hasUsableContent(item: ReviewWord, mode: PracticeMode) {
+  const content = getContent(item);
+
+  if (!content?.display_word) return false;
+
+  const hasMeaning = Boolean(content.turkish_meaning || content.simple_definition);
+
+  if (mode === "fill") {
+    return hasMeaning && Boolean(content.daily_life_example || content.toefl_example);
+  }
+
+  return hasMeaning;
 }
 
 function isDue(item: ReviewWord) {
@@ -371,47 +462,126 @@ function isDue(item: ReviewWord) {
 
 function buildQuizQuestion(
   currentWord: ReviewWord,
+  allWords: ReviewWord[],
+  mode: PracticeMode
+): QuizQuestion {
+  if (mode === "reverse") {
+    return buildReverseQuestion(currentWord, allWords);
+  }
+
+  if (mode === "fill") {
+    return buildFillQuestion(currentWord, allWords);
+  }
+
+  return buildMeaningQuestion(currentWord, allWords);
+}
+
+function buildMeaningQuestion(
+  currentWord: ReviewWord,
   allWords: ReviewWord[]
 ): QuizQuestion {
-  const currentContent = Array.isArray(currentWord.word_contents)
-    ? currentWord.word_contents[0]
-    : currentWord.word_contents;
-
-  const correctAnswer =
-    currentContent?.turkish_meaning ||
-    currentContent?.simple_definition ||
-    "Meaning has not been generated yet.";
+  const correctAnswer = getMeaning(currentWord);
 
   const otherMeanings = allWords
     .filter((item) => item.id !== currentWord.id)
-    .map((item) => {
-      const content = Array.isArray(item.word_contents)
-        ? item.word_contents[0]
-        : item.word_contents;
-
-      return content?.turkish_meaning || content?.simple_definition || "";
-    })
+    .map(getMeaning)
     .filter((item) => item.length > 0)
     .filter((item) => item !== correctAnswer);
 
-  const combinedOptions = Array.from(
-    new Set([correctAnswer, ...otherMeanings, ...FALLBACK_MEANINGS])
-  ).slice(0, 4);
-
-  const stableOptions = sortOptionsStable(combinedOptions, currentWord.id);
+  const options = buildStableOptions(
+    [correctAnswer, ...otherMeanings, ...FALLBACK_MEANINGS],
+    currentWord.id
+  );
 
   return {
-    word: currentContent?.display_word ?? "Untitled word",
+    mode: "meaning",
+    title: getWord(currentWord),
+    prompt: "What does this word mean?",
     correctAnswer,
-    simpleMeaning:
-      currentContent?.simple_definition ||
-      "Simple meaning has not been generated yet.",
-    example:
-      currentContent?.daily_life_example ||
-      currentContent?.toefl_example ||
-      "Example sentence has not been generated yet.",
-    options: stableOptions,
+    meaning: getMeaning(currentWord),
+    simpleMeaning: getSimpleMeaning(currentWord),
+    example: getExample(currentWord),
+    options,
   };
+}
+
+function buildReverseQuestion(
+  currentWord: ReviewWord,
+  allWords: ReviewWord[]
+): QuizQuestion {
+  const correctAnswer = getWord(currentWord);
+
+  const otherWords = allWords
+    .filter((item) => item.id !== currentWord.id)
+    .map(getWord)
+    .filter((item) => item.length > 0)
+    .filter((item) => item !== correctAnswer);
+
+  const options = buildStableOptions(
+    [correctAnswer, ...otherWords, ...FALLBACK_WORDS],
+    currentWord.id
+  );
+
+  return {
+    mode: "reverse",
+    title: getMeaning(currentWord),
+    prompt: "Which word matches this meaning?",
+    correctAnswer,
+    meaning: getMeaning(currentWord),
+    simpleMeaning: getSimpleMeaning(currentWord),
+    example: getExample(currentWord),
+    options,
+  };
+}
+
+function buildFillQuestion(
+  currentWord: ReviewWord,
+  allWords: ReviewWord[]
+): QuizQuestion {
+  const correctAnswer = getWord(currentWord);
+  const example = getExample(currentWord);
+  const blankedExample = createBlankedExample(example, correctAnswer);
+
+  const otherWords = allWords
+    .filter((item) => item.id !== currentWord.id)
+    .map(getWord)
+    .filter((item) => item.length > 0)
+    .filter((item) => item !== correctAnswer);
+
+  const options = buildStableOptions(
+    [correctAnswer, ...otherWords, ...FALLBACK_WORDS],
+    currentWord.id
+  );
+
+  return {
+    mode: "fill",
+    title: blankedExample,
+    prompt: "Choose the word that completes the sentence.",
+    correctAnswer,
+    meaning: getMeaning(currentWord),
+    simpleMeaning: getSimpleMeaning(currentWord),
+    example,
+    options,
+  };
+}
+
+function createBlankedExample(example: string, word: string) {
+  const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const exactRegex = new RegExp(`\\b${escapedWord}\\b`, "i");
+
+  if (exactRegex.test(example)) {
+    return example.replace(exactRegex, "_____");
+  }
+
+  return `${example}\n\nMissing word: _____`;
+}
+
+function buildStableOptions(values: string[], seed: string) {
+  const uniqueValues = Array.from(
+    new Set(values.map((item) => item.trim()).filter((item) => item.length > 0))
+  ).slice(0, 4);
+
+  return sortOptionsStable(uniqueValues, seed);
 }
 
 function sortOptionsStable(options: string[], seed: string) {
@@ -545,9 +715,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   wordTitle: {
-    fontSize: 44,
+    fontSize: 34,
     fontWeight: "900",
     color: "#ffffff",
+    lineHeight: 42,
   },
   card: {
     backgroundColor: "#ffffff",
