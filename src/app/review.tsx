@@ -168,9 +168,7 @@ export default function ReviewScreen() {
       typedWords = typedWords.filter((item) => setWordIds.has(item.id));
     }
 
-    const dueWords = typedWords.filter(isDue);
-    const notDueWords = typedWords.filter((item) => !isDue(item));
-    const orderedPracticeWords = [...dueWords, ...notDueWords].slice(0, 20);
+    const orderedPracticeWords = typedWords.filter(isDue).slice(0, 20);
 
     setAllWords(typedWords);
     setPracticeWords(orderedPracticeWords);

@@ -20,6 +20,9 @@ type WordContent = {
   simple_definition: string | null;
   turkish_meaning: string | null;
   mini_lesson: string | null;
+  toefl_example: string | null;
+  daily_life_example: string | null;
+  fill_blank_sentence: string | null;
 };
 
 type UserWord = {
@@ -142,7 +145,10 @@ export default function HomeScreen() {
           normalized_word,
           simple_definition,
           turkish_meaning,
-          mini_lesson
+          mini_lesson,
+          toefl_example,
+          daily_life_example,
+          fill_blank_sentence
         )
       `
       )
@@ -505,6 +511,31 @@ export default function HomeScreen() {
     );
   }
 
+  function hasMeaningPracticeContent(item: UserWord) {
+    const content = getContent(item);
+
+    return Boolean(content?.turkish_meaning);
+  }
+
+  function hasReversePracticeContent(item: UserWord) {
+    const content = getContent(item);
+
+    return Boolean(content?.turkish_meaning || content?.simple_definition);
+  }
+
+  function hasFillPracticeContent(item: UserWord) {
+    const content = getContent(item);
+
+    const hasMeaning = Boolean(content?.turkish_meaning || content?.simple_definition);
+    const hasExample = Boolean(
+      content?.fill_blank_sentence ||
+        content?.daily_life_example ||
+        content?.toefl_example
+    );
+
+    return hasMeaning && hasExample;
+  }
+
   function isDue(item: UserWord) {
     if (!item.next_review_at) return true;
 
@@ -541,7 +572,33 @@ export default function HomeScreen() {
   }, [words, setItems, selectedSetId]);
 
   const aiReadyCount = visibleWords.filter(hasAiContent).length;
+  const meaningReadyCount = visibleWords.filter(hasMeaningPracticeContent).length;
+  const reverseReadyCount = visibleWords.filter(hasReversePracticeContent).length;
+  const fillReadyCount = visibleWords.filter(hasFillPracticeContent).length;
+
+  const meaningDueCount = visibleWords.filter(
+    (item) => hasMeaningPracticeContent(item) && isDue(item)
+  ).length;
+  const reverseDueCount = visibleWords.filter(
+    (item) => hasReversePracticeContent(item) && isDue(item)
+  ).length;
+  const fillDueCount = visibleWords.filter(
+    (item) => hasFillPracticeContent(item) && isDue(item)
+  ).length;
   const dueCount = visibleWords.filter((item) => hasAiContent(item) && isDue(item)).length;
+
+  const practiceScopeLabel = selectedSet ? "this set" : "your Library";
+  const emptyPracticeText = selectedSet
+    ? "This set is empty. Add words to start practicing."
+    : "Add words or create a set to start practicing.";
+  const practiceSummaryText =
+    visibleWords.length === 0
+      ? emptyPracticeText
+      : aiReadyCount === 0
+        ? "Open a word and generate AI content before practicing."
+        : dueCount === 0
+          ? `Nothing is due in ${practiceScopeLabel} right now.`
+          : `Practice the words due now in ${practiceScopeLabel}.`;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -762,10 +819,7 @@ export default function HomeScreen() {
           {selectedSet ? selectedSet.name : "Library"}
         </Text>
         <Text style={styles.practiceTitle}>Practice modes</Text>
-        <Text style={styles.practiceText}>
-          Practice {selectedSet ? "this set" : "your library"} with
-          focused quiz modes.
-        </Text>
+        <Text style={styles.practiceText}>{practiceSummaryText}</Text>
 
         <View style={styles.practiceStatsRow}>
           <View style={styles.practiceStatPill}>
@@ -782,8 +836,17 @@ export default function HomeScreen() {
         <View style={styles.modeList}>
           <PracticeModeButton
             title="Meaning Quiz"
-            description="See the word, choose the meaning."
-            disabled={aiReadyCount === 0}
+            description="See the word, choose the Turkish meaning."
+            readyCount={meaningDueCount}
+            totalReadyCount={meaningReadyCount}
+            disabled={meaningDueCount === 0}
+            disabledReason={
+              visibleWords.length === 0
+                ? "Add words first."
+                : meaningReadyCount === 0
+                  ? "Generate AI content with Turkish meaning first."
+                  : "Nothing due right now."
+            }
             onPress={() =>
               router.push({
                 pathname: "/review",
@@ -801,7 +864,16 @@ export default function HomeScreen() {
           <PracticeModeButton
             title="Reverse Quiz"
             description="See the meaning, choose the word."
-            disabled={aiReadyCount === 0}
+            readyCount={reverseDueCount}
+            totalReadyCount={reverseReadyCount}
+            disabled={reverseDueCount === 0}
+            disabledReason={
+              visibleWords.length === 0
+                ? "Add words first."
+                : reverseReadyCount === 0
+                  ? "Generate AI content first."
+                  : "Nothing due right now."
+            }
             onPress={() =>
               router.push({
                 pathname: "/review",
@@ -819,7 +891,16 @@ export default function HomeScreen() {
           <PracticeModeButton
             title="Fill in the Blank"
             description="Complete an example sentence."
-            disabled={aiReadyCount === 0}
+            readyCount={fillDueCount}
+            totalReadyCount={fillReadyCount}
+            disabled={fillDueCount === 0}
+            disabledReason={
+              visibleWords.length === 0
+                ? "Add words first."
+                : fillReadyCount === 0
+                  ? "Generate AI example content first."
+                  : "Nothing due right now."
+            }
             onPress={() =>
               router.push({
                 pathname: "/review",
@@ -995,14 +1076,20 @@ export default function HomeScreen() {
 type PracticeModeButtonProps = {
   title: string;
   description: string;
+  readyCount: number;
+  totalReadyCount: number;
   disabled: boolean;
+  disabledReason: string;
   onPress: () => void;
 };
 
 function PracticeModeButton({
   title,
   description,
+  readyCount,
+  totalReadyCount,
   disabled,
+  disabledReason,
   onPress,
 }: PracticeModeButtonProps) {
   return (
@@ -1014,6 +1101,11 @@ function PracticeModeButton({
       <View style={styles.practiceModeTextWrap}>
         <Text style={styles.practiceModeTitle}>{title}</Text>
         <Text style={styles.practiceModeDescription}>{description}</Text>
+        <Text style={styles.practiceModeDescription}>
+          {disabled
+            ? disabledReason
+            : `${readyCount} due now • ${totalReadyCount} ready`}
+        </Text>
       </View>
 
       <Text style={styles.practiceModeChevron}>›</Text>
