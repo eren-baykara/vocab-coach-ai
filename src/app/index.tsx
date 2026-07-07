@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,287 +13,441 @@ import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../lib/supabase";
 
+type WordContent = {
+  display_word: string | null;
+};
+
+type UserWord = {
+  id: string;
+  status: string | null;
+  created_at: string;
+  word_contents: WordContent | WordContent[] | null;
+};
+
 export default function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [wordsLoading, setWordsLoading] = useState(false);
+  const [addingWord, setAddingWord] = useState(false);
+
+  const [word, setWord] = useState("");
+  const [words, setWords] = useState<UserWord[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      setIsCheckingSession(false);
+      setInitialLoading(false);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, currentSession) => {
-        setSession(currentSession);
-      }
-    );
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
 
     return () => {
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  async function createProfileIfNeeded(userId: string) {
-    const { error } = await supabase.from("profiles").upsert(
-      {
-        user_id: userId,
-        exam_goal: "TOEFL",
-        english_level: "B2",
-        daily_minutes: 10,
-        native_language: "Turkish",
-      },
-      {
-        onConflict: "user_id",
-      }
-    );
+  const loadWords = useCallback(async () => {
+    if (!session) return;
+
+    setWordsLoading(true);
+
+    const { data, error } = await supabase
+      .from("user_words")
+      .select(
+        `
+        id,
+        status,
+        created_at,
+        word_contents (
+          display_word
+        )
+      `
+      )
+      .order("created_at", { ascending: false });
+
+    setWordsLoading(false);
 
     if (error) {
-      console.log("Profile create error:", error.message);
+      Alert.alert("Could not load words", error.message);
+      return;
     }
-  }
+
+    setWords((data ?? []) as UserWord[]);
+  }, [session]);
+
+  useEffect(() => {
+    if (session) {
+      loadWords();
+    } else {
+      setWords([]);
+    }
+  }, [session, loadWords]);
 
   async function handleSignUp() {
-    if (!email || !password) {
-      Alert.alert("Missing information", "Please enter email and password.");
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Missing information", "Please enter your email and password.");
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
-      return;
-    }
+    setAuthLoading(true);
 
-    setIsLoading(true);
-
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
     });
+
+    setAuthLoading(false);
 
     if (error) {
       Alert.alert("Sign up failed", error.message);
-      setIsLoading(false);
       return;
     }
 
-    if (data.user) {
-      await createProfileIfNeeded(data.user.id);
-    }
-
-    setIsLoading(false);
-    Alert.alert("Account created", "Welcome to Vocab Coach AI.");
+    Alert.alert("Account created", "You can now start adding words.");
   }
 
   async function handleSignIn() {
-    if (!email || !password) {
-      Alert.alert("Missing information", "Please enter email and password.");
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Missing information", "Please enter your email and password.");
       return;
     }
 
-    setIsLoading(true);
+    setAuthLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
 
+    setAuthLoading(false);
+
     if (error) {
       Alert.alert("Login failed", error.message);
-      setIsLoading(false);
-      return;
     }
-
-    if (data.user) {
-      await createProfileIfNeeded(data.user.id);
-    }
-
-    setIsLoading(false);
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      Alert.alert("Sign out failed", error.message);
+    }
   }
 
-  if (isCheckingSession) {
+  async function handleAddWord() {
+    const cleanWord = word.trim();
+
+    if (!cleanWord) {
+      Alert.alert("Missing word", "Please enter a word first.");
+      return;
+    }
+
+    setAddingWord(true);
+
+    const { error } = await supabase.rpc("add_user_word", {
+      input_word: cleanWord,
+    });
+
+    setAddingWord(false);
+
+    if (error) {
+      Alert.alert("Could not add word", error.message);
+      return;
+    }
+
+    setWord("");
+    await loadWords();
+  }
+
+  function getDisplayWord(item: UserWord) {
+    const content = Array.isArray(item.word_contents)
+      ? item.word_contents[0]
+      : item.word_contents;
+
+    return content?.display_word ?? "Untitled word";
+  }
+
+  if (initialLoading) {
     return (
       <View style={styles.centeredContainer}>
         <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading your session...</Text>
+        <Text style={styles.loadingText}>Loading Vocab Coach AI...</Text>
       </View>
     );
   }
 
-  if (session) {
+  if (!session) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Vocab Coach AI</Text>
-        <Text style={styles.subtitle}>
-          Don&apos;t memorize words. Learn how to use them.
-        </Text>
-
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>You are signed in.</Text>
-          <Text style={styles.cardText}>{session.user.email}</Text>
-        </View>
+          <Text style={styles.title}>Vocab Coach AI</Text>
+          <Text style={styles.subtitle}>
+            Don&apos;t memorize words. Learn how to use them.
+          </Text>
 
-        <Pressable style={styles.secondaryButton} onPress={handleSignOut}>
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        </Pressable>
-      </View>
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+
+          <Pressable
+            style={[styles.button, authLoading && styles.disabledButton]}
+            onPress={handleSignIn}
+            disabled={authLoading}
+          >
+            <Text style={styles.buttonText}>
+              {authLoading ? "Please wait..." : "Log in"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.secondaryButton, authLoading && styles.disabledButton]}
+            onPress={handleSignUp}
+            disabled={authLoading}
+          >
+            <Text style={styles.secondaryButtonText}>Create account</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={styles.title}>Vocab Coach AI</Text>
-      <Text style={styles.subtitle}>
-        Don&apos;t memorize words. Learn how to use them.
-      </Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>My Words</Text>
+          <Text style={styles.subtitle}>{session.user.email}</Text>
+        </View>
 
-      <View style={styles.form}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="At least 6 characters"
-          secureTextEntry
-          style={styles.input}
-        />
-
-        <Pressable
-          style={[styles.primaryButton, isLoading && styles.disabledButton]}
-          onPress={handleSignUp}
-          disabled={isLoading}
-        >
-          <Text style={styles.primaryButtonText}>
-            {isLoading ? "Please wait..." : "Create account"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={handleSignIn}
-          disabled={isLoading}
-        >
-          <Text style={styles.secondaryButtonText}>I already have an account</Text>
+        <Pressable style={styles.signOutButton} onPress={handleSignOut}>
+          <Text style={styles.signOutButtonText}>Sign out</Text>
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Add a new word</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Example: analyze"
+          autoCapitalize="none"
+          value={word}
+          onChangeText={setWord}
+          editable={!addingWord}
+        />
+
+        <Pressable
+          style={[styles.button, addingWord && styles.disabledButton]}
+          onPress={handleAddWord}
+          disabled={addingWord}
+        >
+          <Text style={styles.buttonText}>
+            {addingWord ? "Adding..." : "Add word"}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.wordsHeader}>
+          <Text style={styles.sectionTitle}>Your vocabulary</Text>
+
+          <Pressable onPress={loadWords} disabled={wordsLoading}>
+            <Text style={styles.refreshText}>
+              {wordsLoading ? "Loading..." : "Refresh"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {wordsLoading && words.length === 0 ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator />
+            <Text style={styles.emptyStateText}>Loading your words...</Text>
+          </View>
+        ) : words.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No words yet</Text>
+            <Text style={styles.emptyStateText}>
+              Add your first word to start building your personal vocabulary list.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.wordList}>
+            {words.map((item) => (
+              <View key={item.id} style={styles.wordItem}>
+                <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
+                <Text style={styles.statusText}>{item.status ?? "new"}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    padding: 24,
+    backgroundColor: "#f8fafc",
+  },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#f8fafc",
   },
   loadingText: {
     marginTop: 12,
-    color: "#6B7280",
+    fontSize: 16,
+    color: "#475569",
   },
-  container: {
-    flex: 1,
-    padding: 24,
-    justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+  header: {
+    marginBottom: 20,
+    gap: 16,
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
   title: {
     fontSize: 32,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 12,
-    textAlign: "center",
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 17,
-    fontWeight: "500",
-    color: "#374151",
-    marginBottom: 32,
-    textAlign: "center",
-    lineHeight: 24,
+    fontSize: 16,
+    color: "#64748b",
+    lineHeight: 22,
   },
-  form: {
-    gap: 12,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 14,
   },
   input: {
-    height: 52,
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#cbd5e1",
     borderRadius: 14,
     paddingHorizontal: 16,
-    backgroundColor: "#FFFFFF",
+    paddingVertical: 14,
     fontSize: 16,
+    color: "#0f172a",
+    marginBottom: 12,
   },
-  primaryButton: {
-    height: 52,
+  button: {
+    backgroundColor: "#2563eb",
     borderRadius: 14,
+    paddingVertical: 14,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2563EB",
-    marginTop: 8,
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
+  buttonText: {
+    color: "#ffffff",
     fontSize: 16,
     fontWeight: "700",
   },
   secondaryButton: {
-    height: 52,
+    borderWidth: 1,
+    borderColor: "#2563eb",
     borderRadius: 14,
+    paddingVertical: 14,
     alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
+    marginTop: 12,
   },
   secondaryButtonText: {
-    color: "#2563EB",
+    color: "#2563eb",
     fontSize: 16,
     fontWeight: "700",
   },
-  card: {
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginBottom: 20,
+  disabledButton: {
+    opacity: 0.6,
   },
-  cardTitle: {
+  signOutButton: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#ef4444",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  signOutButtonText: {
+    color: "#ef4444",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  wordsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  refreshText: {
+    color: "#2563eb",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 28,
+  },
+  emptyStateTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 6,
+    color: "#0f172a",
+    marginBottom: 8,
   },
-  cardText: {
+  emptyStateText: {
     fontSize: 15,
-    color: "#6B7280",
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  wordList: {
+    gap: 10,
+  },
+  wordItem: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: "#f8fafc",
+  },
+  wordText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    color: "#64748b",
   },
 });
