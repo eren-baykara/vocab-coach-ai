@@ -99,6 +99,7 @@ export default function HomeScreen() {
   const [wordsLoading, setWordsLoading] = useState(false);
   const [setsLoading, setSetsLoading] = useState(false);
   const [addingWord, setAddingWord] = useState(false);
+  const [addingWordWithAi, setAddingWordWithAi] = useState(false);
   const [creatingSet, setCreatingSet] = useState(false);
 
   const [word, setWord] = useState("");
@@ -398,7 +399,7 @@ export default function HomeScreen() {
     await loadSets();
   }
 
-  async function handleAddWord() {
+  async function handleAddWord(generateAiAfterAdd = false) {
     const cleanWord = word.trim();
 
     if (!cleanWord) {
@@ -406,7 +407,11 @@ export default function HomeScreen() {
       return;
     }
 
-    setAddingWord(true);
+    if (generateAiAfterAdd) {
+      setAddingWordWithAi(true);
+    } else {
+      setAddingWord(true);
+    }
 
     const { error } = await supabase.rpc("add_user_word", {
       input_word: cleanWord,
@@ -414,23 +419,25 @@ export default function HomeScreen() {
 
     if (error) {
       setAddingWord(false);
+      setAddingWordWithAi(false);
       Alert.alert("Could not add word", error.message);
       return;
     }
 
+    const targetWord = await findUserWordByInput(cleanWord);
+
+    if (!targetWord) {
+      setAddingWord(false);
+      setAddingWordWithAi(false);
+      Alert.alert(
+        "Word added",
+        "The word was added to your Library, but I could not find it for the next step."
+      );
+      await refreshAll();
+      return;
+    }
+
     if (selectedSetId) {
-      const targetWord = await findUserWordByInput(cleanWord);
-
-      if (!targetWord) {
-        setAddingWord(false);
-        Alert.alert(
-          "Word added",
-          "The word was added to your library, but I could not find it to attach it to this set."
-        );
-        await refreshAll();
-        return;
-      }
-
       const { error: setError } = await supabase
         .from("word_set_items")
         .insert({
@@ -440,14 +447,73 @@ export default function HomeScreen() {
 
       if (setError && setError.code !== "23505") {
         setAddingWord(false);
+        setAddingWordWithAi(false);
         Alert.alert("Word added, but could not add it to set", setError.message);
         return;
       }
     }
 
+    if (generateAiAfterAdd) {
+      const { error: aiError } = await supabase.functions.invoke(
+        "generate-word-content",
+        {
+          body: {
+            user_word_id: targetWord.id,
+          },
+        }
+      );
+
+      if (aiError) {
+        setAddingWord(false);
+        setAddingWordWithAi(false);
+        Alert.alert(
+          "Word added, but AI failed",
+          await getFunctionErrorMessage(aiError)
+        );
+        await refreshAll();
+        return;
+      }
+    }
+
     setAddingWord(false);
+    setAddingWordWithAi(false);
     setWord("");
     await refreshAll();
+  }
+
+  async function getFunctionErrorMessage(error: unknown) {
+    const fallbackMessage =
+      error instanceof Error ? error.message : "Unknown function error";
+
+    const maybeError = error as {
+      context?: Response;
+    };
+
+    if (!maybeError.context) {
+      return fallbackMessage;
+    }
+
+    try {
+      const responseText = await maybeError.context.text();
+
+      if (!responseText) {
+        return fallbackMessage;
+      }
+
+      try {
+        const parsed = JSON.parse(responseText);
+
+        if (parsed?.error) {
+          return String(parsed.error);
+        }
+
+        return responseText;
+      } catch {
+        return responseText;
+      }
+    } catch {
+      return fallbackMessage;
+    }
   }
 
   async function findUserWordByInput(inputWord: string) {
@@ -617,6 +683,8 @@ export default function HomeScreen() {
         : dueCount === 0
           ? `No scheduled review in ${practiceScopeLabel} right now.`
           : `Practice today’s review words in ${practiceScopeLabel}.`;
+
+  const wordActionLoading = addingWord || addingWordWithAi;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -1005,8 +1073,8 @@ export default function HomeScreen() {
           autoCapitalize="none"
           value={word}
           onChangeText={setWord}
-          editable={!addingWord}
-          onSubmitEditing={handleAddWord}
+          editable={!wordActionLoading}
+          onSubmitEditing={() => handleAddWord(false)}
         />
 
         {wordSuggestions.length > 0 ? (
@@ -1028,12 +1096,22 @@ export default function HomeScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.button, addingWord && styles.disabledButton]}
-          onPress={handleAddWord}
-          disabled={addingWord}
+          style={[styles.button, wordActionLoading && styles.disabledButton]}
+          onPress={() => handleAddWord(false)}
+          disabled={wordActionLoading}
         >
           <Text style={styles.buttonText}>
             {addingWord ? "Adding..." : "Add word"}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.secondaryButton, wordActionLoading && styles.disabledButton]}
+          onPress={() => handleAddWord(true)}
+          disabled={wordActionLoading}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {addingWordWithAi ? "Generating..." : "Add + Generate AI"}
           </Text>
         </Pressable>
       </View>
