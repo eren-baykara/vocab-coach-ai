@@ -44,6 +44,7 @@ export default function WordDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [wordDetail, setWordDetail] = useState<UserWordDetail | null>(null);
 
   const loadWordDetail = useCallback(async () => {
@@ -121,6 +122,41 @@ export default function WordDetailScreen() {
     return value.join(", ");
   }
 
+  function confirmRemoveWord() {
+    Alert.alert(
+      "Remove word?",
+      "This will remove the word from your personal list. The shared word content will stay in the database.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: removeWord,
+        },
+      ]
+    );
+  }
+
+  async function removeWord() {
+    if (!id) return;
+
+    setDeleting(true);
+
+    const { error } = await supabase.from("user_words").delete().eq("id", id);
+
+    setDeleting(false);
+
+    if (error) {
+      Alert.alert("Could not remove word", error.message);
+      return;
+    }
+
+    router.back();
+  }
+
   const content = getContent();
   const title = content?.display_word ?? "Word detail";
 
@@ -160,9 +196,7 @@ export default function WordDetailScreen() {
 
       <View style={styles.heroCard}>
         <Text style={styles.wordTitle}>{content.display_word}</Text>
-        <Text style={styles.wordMeta}>
-          Status: {wordDetail.status ?? "new"}
-        </Text>
+        <Text style={styles.wordMeta}>Status: {wordDetail.status ?? "new"}</Text>
       </View>
 
       <View style={styles.card}>
@@ -232,6 +266,23 @@ export default function WordDetailScreen() {
           label="Difficulty"
           value={renderTextValue(content.difficulty_level)}
         />
+      </View>
+
+      <View style={styles.dangerCard}>
+        <Text style={styles.dangerTitle}>Remove from my words</Text>
+        <Text style={styles.dangerText}>
+          This only removes the word from your personal vocabulary list.
+        </Text>
+
+        <Pressable
+          style={[styles.dangerButton, deleting && styles.disabledButton]}
+          onPress={confirmRemoveWord}
+          disabled={deleting}
+        >
+          <Text style={styles.dangerButtonText}>
+            {deleting ? "Removing..." : "Remove word"}
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -349,5 +400,39 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  dangerCard: {
+    backgroundColor: "#fef2f2",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  dangerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#991b1b",
+    marginBottom: 8,
+  },
+  dangerText: {
+    fontSize: 15,
+    color: "#7f1d1d",
+    lineHeight: 22,
+    marginBottom: 14,
+  },
+  dangerButton: {
+    backgroundColor: "#dc2626",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  dangerButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });
