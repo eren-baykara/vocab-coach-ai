@@ -1101,93 +1101,18 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.card}>
-        <View style={styles.wordsHeader}>
-          <Text style={styles.sectionTitle}>
-            {selectedSet ? selectedSet.name : "Library"}
-          </Text>
+        <Text style={styles.sectionTitle}>Word archive</Text>
+        <Text style={styles.helperText}>
+          Open the Library tab to search all words, check AI readiness, and view
+          word details.
+        </Text>
 
-          <Pressable onPress={refreshAll} disabled={wordsLoading || setsLoading}>
-            <Text style={styles.refreshText}>
-              {wordsLoading || setsLoading ? "Loading..." : "Refresh"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {wordsLoading && visibleWords.length === 0 ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator />
-            <Text style={styles.emptyStateText}>Loading your words...</Text>
-          </View>
-        ) : visibleWords.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>
-              {selectedSet ? "This set is empty" : "No words yet"}
-            </Text>
-            <Text style={styles.emptyStateText}>
-              {selectedSet
-                ? "Add a word while this set is selected."
-                : "Create a set like TOEFL, or add a word directly to your Library."}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.wordList}>
-            {visibleWords.map((item) => {
-              const aiReady = hasAiContent(item);
-
-              return (
-                <View key={item.id} style={styles.wordItem}>
-                  <Pressable
-                    style={styles.wordOpenArea}
-                    onPress={() => openWordDetail(item)}
-                  >
-                    <View style={styles.wordMainContent}>
-                      <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
-
-                    <View style={styles.badgeRow}>
-                      <View style={styles.statusBadge}>
-                        <Text style={styles.statusBadgeText}>
-                          {item.status ?? "new"}
-                        </Text>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.aiBadge,
-                          aiReady ? styles.aiReadyBadge : styles.aiMissingBadge,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.aiBadgeText,
-                            aiReady
-                              ? styles.aiReadyBadgeText
-                              : styles.aiMissingBadgeText,
-                          ]}
-                        >
-                          {aiReady ? "Practice ready" : "Needs AI"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Text style={styles.chevron}>›</Text>
-                  </Pressable>
-
-                  {selectedSet ? (
-                    <Pressable
-                      style={styles.removeFromSetButton}
-                      onPress={() => confirmRemoveWordFromSelectedSet(item)}
-                    >
-                      <Text style={styles.removeFromSetButtonText}>
-                        Remove from this set
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        )}
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => router.push("/library" as never)}
+        >
+          <Text style={styles.secondaryButtonText}>Open Library</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
