@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { supabase } from "../lib/supabase";
 type WordContent = {
   display_word: string | null;
   simple_definition: string | null;
+  turkish_meaning: string | null;
   mini_lesson: string | null;
 };
 
@@ -24,8 +25,51 @@ type UserWord = {
   id: string;
   status: string | null;
   created_at: string;
+  next_review_at: string | null;
   word_contents: WordContent | WordContent[] | null;
 };
+
+const COMMON_WORD_SUGGESTIONS = [
+  "usually",
+  "usual",
+  "usage",
+  "use",
+  "useful",
+  "used to",
+  "analyze",
+  "approach",
+  "assume",
+  "benefit",
+  "challenge",
+  "compare",
+  "consider",
+  "consistent",
+  "context",
+  "define",
+  "develop",
+  "effective",
+  "evidence",
+  "expand",
+  "explain",
+  "focus",
+  "improve",
+  "include",
+  "increase",
+  "indicate",
+  "maintain",
+  "method",
+  "occur",
+  "process",
+  "provide",
+  "require",
+  "significant",
+  "similar",
+  "specific",
+  "structure",
+  "suggest",
+  "support",
+  "therefore",
+];
 
 export default function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
@@ -70,9 +114,11 @@ export default function HomeScreen() {
         id,
         status,
         created_at,
+        next_review_at,
         word_contents (
           display_word,
           simple_definition,
+          turkish_meaning,
           mini_lesson
         )
       `
@@ -196,7 +242,17 @@ export default function HomeScreen() {
   function hasAiContent(item: UserWord) {
     const content = getContent(item);
 
-    return Boolean(content?.simple_definition || content?.mini_lesson);
+    return Boolean(
+      content?.turkish_meaning ||
+        content?.simple_definition ||
+        content?.mini_lesson
+    );
+  }
+
+  function isDue(item: UserWord) {
+    if (!item.next_review_at) return true;
+
+    return new Date(item.next_review_at) <= new Date();
   }
 
   function openWordDetail(item: UserWord) {
@@ -207,6 +263,31 @@ export default function HomeScreen() {
   }
 
   const aiReadyCount = words.filter(hasAiContent).length;
+  const dueCount = words.filter((item) => hasAiContent(item) && isDue(item)).length;
+
+  const wordSuggestions = useMemo(() => {
+    const cleanInput = word.trim().toLowerCase();
+
+    if (cleanInput.length < 2) return [];
+
+    const existingWords = words
+      .map((item) => getDisplayWord(item))
+      .filter(Boolean);
+
+    const combined = [...existingWords, ...COMMON_WORD_SUGGESTIONS];
+
+    const uniqueSuggestions = Array.from(
+      new Set(
+        combined
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
+          .filter((item) => item.toLowerCase() !== cleanInput)
+          .filter((item) => item.toLowerCase().startsWith(cleanInput))
+      )
+    );
+
+    return uniqueSuggestions.slice(0, 6);
+  }, [word, words]);
 
   if (initialLoading) {
     return (
@@ -223,7 +304,7 @@ export default function HomeScreen() {
         <View style={styles.card}>
           <Text style={styles.title}>Vocab Coach AI</Text>
           <Text style={styles.subtitle}>
-            Don&apos;t memorize words. Learn how to use them.
+            Don't memorize words. Learn how to use them.
           </Text>
 
           <TextInput
@@ -269,12 +350,46 @@ export default function HomeScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>My Words</Text>
-          <Text style={styles.subtitle}>{session.user.email}</Text>
+          <Text style={styles.title}>Vocab Coach AI</Text>
+          <Text style={styles.subtitle}>Don't memorize. Practice using words.</Text>
         </View>
 
         <Pressable style={styles.signOutButton} onPress={handleSignOut}>
           <Text style={styles.signOutButtonText}>Sign out</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.practiceCard}>
+        <Text style={styles.practiceEyebrow}>Today's practice</Text>
+        <Text style={styles.practiceTitle}>Meaning Quiz</Text>
+        <Text style={styles.practiceText}>
+          Practice your whole vocabulary list with multiple-choice meaning
+          questions.
+        </Text>
+
+        <View style={styles.practiceStatsRow}>
+          <View style={styles.practiceStatPill}>
+            <Text style={styles.practiceStatNumber}>{aiReadyCount}</Text>
+            <Text style={styles.practiceStatLabel}>practice ready</Text>
+          </View>
+
+          <View style={styles.practiceStatPill}>
+            <Text style={styles.practiceStatNumber}>{dueCount}</Text>
+            <Text style={styles.practiceStatLabel}>due now</Text>
+          </View>
+        </View>
+
+        <Pressable
+          style={[
+            styles.practiceButton,
+            aiReadyCount === 0 && styles.disabledButton,
+          ]}
+          onPress={() => router.push("/review")}
+          disabled={aiReadyCount === 0}
+        >
+          <Text style={styles.practiceButtonText}>
+            {aiReadyCount === 0 ? "Generate AI first" : "Start practice"}
+          </Text>
         </Pressable>
       </View>
 
@@ -292,32 +407,39 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.reviewCard}>
-        <Text style={styles.reviewTitle}>Ready to practice?</Text>
-        <Text style={styles.reviewText}>
-          Review due words and update your memory status.
-        </Text>
-
-        <Pressable
-          style={styles.reviewButton}
-          onPress={() => router.push("/review")}
-        >
-          <Text style={styles.reviewButtonText}>Start review</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Add a new word</Text>
+        <Text style={styles.helperText}>
+          Type a word. Suggestions help when you are not sure about spelling.
+        </Text>
 
         <TextInput
           style={styles.input}
-          placeholder="Example: analyze"
+          placeholder="Example: usually"
           autoCapitalize="none"
           value={word}
           onChangeText={setWord}
           editable={!addingWord}
           onSubmitEditing={handleAddWord}
         />
+
+        {wordSuggestions.length > 0 ? (
+          <View style={styles.suggestionsWrap}>
+            <Text style={styles.suggestionsLabel}>Suggestions</Text>
+
+            <View style={styles.suggestionList}>
+              {wordSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion}
+                  style={styles.suggestionChip}
+                  onPress={() => setWord(suggestion)}
+                >
+                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <Pressable
           style={[styles.button, addingWord && styles.disabledButton]}
@@ -350,7 +472,8 @@ export default function HomeScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No words yet</Text>
             <Text style={styles.emptyStateText}>
-              Add your first word to start building your personal vocabulary list.
+              Add your first word. Next step will be creating sets like TOEFL,
+              Daily English, and My Mistakes.
             </Text>
           </View>
         ) : (
@@ -388,7 +511,7 @@ export default function HomeScreen() {
                               : styles.aiMissingBadgeText,
                           ]}
                         >
-                          {aiReady ? "AI ready" : "Needs AI"}
+                          {aiReady ? "Practice ready" : "Needs AI"}
                         </Text>
                       </View>
                     </View>
@@ -434,6 +557,65 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
+  practiceCard: {
+    backgroundColor: "#2563eb",
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 20,
+  },
+  practiceEyebrow: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  practiceTitle: {
+    color: "#ffffff",
+    fontSize: 30,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
+  practiceText: {
+    color: "#dbeafe",
+    fontSize: 16,
+    lineHeight: 23,
+    marginBottom: 16,
+  },
+  practiceStatsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+  practiceStatPill: {
+    flex: 1,
+    backgroundColor: "#1d4ed8",
+    borderRadius: 16,
+    padding: 14,
+  },
+  practiceStatNumber: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 2,
+  },
+  practiceStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  practiceButton: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  practiceButtonText: {
+    color: "#1d4ed8",
+    fontSize: 16,
+    fontWeight: "900",
+  },
   statsCard: {
     backgroundColor: "#ffffff",
     borderRadius: 20,
@@ -450,14 +632,14 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: 28,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#0f172a",
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 14,
     color: "#64748b",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   statDivider: {
     width: 1,
@@ -466,7 +648,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#0f172a",
     marginBottom: 8,
   },
@@ -477,8 +659,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#0f172a",
+    marginBottom: 10,
+  },
+  helperText: {
+    fontSize: 15,
+    color: "#64748b",
+    lineHeight: 22,
     marginBottom: 14,
   },
   input: {
@@ -492,6 +680,34 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     marginBottom: 12,
   },
+  suggestionsWrap: {
+    marginBottom: 12,
+  },
+  suggestionsLabel: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  suggestionList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  suggestionChip: {
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  suggestionText: {
+    color: "#1d4ed8",
+    fontSize: 14,
+    fontWeight: "800",
+  },
   button: {
     backgroundColor: "#2563eb",
     borderRadius: 14,
@@ -501,7 +717,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   secondaryButton: {
     borderWidth: 1,
@@ -514,7 +730,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: "#2563eb",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   disabledButton: {
     opacity: 0.6,
@@ -530,7 +746,7 @@ const styles = StyleSheet.create({
   signOutButtonText: {
     color: "#ef4444",
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   wordsHeader: {
     flexDirection: "row",
@@ -540,7 +756,7 @@ const styles = StyleSheet.create({
   refreshText: {
     color: "#2563eb",
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   emptyState: {
     alignItems: "center",
@@ -548,7 +764,7 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#0f172a",
     marginBottom: 8,
   },
@@ -577,7 +793,7 @@ const styles = StyleSheet.create({
   },
   wordText: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#0f172a",
     marginBottom: 10,
   },
@@ -595,7 +811,7 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     color: "#0369a1",
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "900",
     textTransform: "uppercase",
   },
   aiBadge: {
@@ -611,7 +827,7 @@ const styles = StyleSheet.create({
   },
   aiBadgeText: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "900",
     textTransform: "uppercase",
   },
   aiReadyBadgeText: {
@@ -623,36 +839,5 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 30,
     color: "#94a3b8",
-  },
-  reviewCard: {
-    backgroundColor: "#eff6ff",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-  },
-  reviewTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#1e3a8a",
-    marginBottom: 8,
-  },
-  reviewText: {
-    fontSize: 15,
-    color: "#1e40af",
-    lineHeight: 22,
-    marginBottom: 14,
-  },
-  reviewButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  reviewButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
   },
 });

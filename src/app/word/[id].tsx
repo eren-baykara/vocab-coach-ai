@@ -70,7 +70,8 @@ const WORD_DETAIL_SELECT = `
 `;
 
 export default function WordDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const id = typeof params.id === "string" ? params.id : undefined;
 
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -120,26 +121,46 @@ export default function WordDetailScreen() {
   function hasAiContent(content: WordContent) {
     return Boolean(
       content.simple_definition ||
-        content.academic_definition ||
         content.turkish_meaning ||
+        content.daily_life_example ||
+        content.toefl_example ||
         content.mini_lesson
     );
   }
 
-  function renderTextValue(value: string | number | null | undefined) {
-    if (value === null || value === undefined || value === "") {
-      return "Not generated yet";
-    }
-
-    return String(value);
+  function getPrimaryMeaning(content: WordContent) {
+    return (
+      content.turkish_meaning ||
+      content.simple_definition ||
+      "Anlam henüz oluşturulmadı."
+    );
   }
 
-  function renderListValue(value: string[] | null | undefined) {
-    if (!value || value.length === 0) {
-      return "Not generated yet";
-    }
+  function getShortDefinition(content: WordContent) {
+    return content.simple_definition || "Basit anlam henüz oluşturulmadı.";
+  }
 
-    return value.join(", ");
+  function getExample(content: WordContent) {
+    return (
+      content.daily_life_example ||
+      content.toefl_example ||
+      "Örnek cümle henüz oluşturulmadı."
+    );
+  }
+
+  function formatReviewDate(value: string | null) {
+    if (!value) return "Henüz planlanmadı";
+
+    const date = new Date(value);
+    const now = new Date();
+
+    if (date <= now) return "Şimdi tekrar edilebilir";
+
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   }
 
   async function generateAiLesson() {
@@ -174,6 +195,7 @@ export default function WordDetailScreen() {
 
     Alert.alert("AI lesson ready", "Your word content has been generated.");
   }
+
   async function getFunctionErrorMessage(error: unknown) {
     const fallbackMessage =
       error instanceof Error ? error.message : "Unknown function error";
@@ -208,6 +230,7 @@ export default function WordDetailScreen() {
       return fallbackMessage;
     }
   }
+
   async function updateWordStatus(newStatus: WordStatus) {
     if (!id || !wordDetail) return;
 
@@ -260,7 +283,7 @@ export default function WordDetailScreen() {
     setWordDetail(typedData);
     setPersonalNote(typedData.personal_note ?? "");
 
-    Alert.alert("Saved", "Your personal note has been saved.");
+    Alert.alert("Saved", "Your note has been saved.");
   }
 
   function confirmRemoveWord() {
@@ -308,12 +331,12 @@ export default function WordDetailScreen() {
       <View style={styles.centeredContainer}>
         <Stack.Screen options={{ title: "Loading..." }} />
         <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading word detail...</Text>
+        <Text style={styles.loadingText}>Loading word...</Text>
       </View>
     );
   }
 
-  if (!wordDetail || !content) {
+  if (!wordDetail || !content || !id) {
     return (
       <View style={styles.centeredContainer}>
         <Stack.Screen options={{ title: "Word not found" }} />
@@ -338,44 +361,46 @@ export default function WordDetailScreen() {
       </Pressable>
 
       <View style={styles.heroCard}>
+        <Text style={styles.heroLabel}>Kelime</Text>
         <Text style={styles.wordTitle}>{content.display_word}</Text>
-        <Text style={styles.wordMeta}>Status: {currentStatus}</Text>
+
+        <View style={styles.badgeRow}>
+          <Text style={styles.heroBadge}>{currentStatus}</Text>
+          <Text
+            style={[
+              styles.heroBadge,
+              aiReady ? styles.readyBadge : styles.needsBadge,
+            ]}
+          >
+            {aiReady ? "Practice ready" : "Needs AI"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.meaningCard}>
+        <Text style={styles.meaningLabel}>Anlam</Text>
+        <Text style={styles.meaningText}>{getPrimaryMeaning(content)}</Text>
+
+        <View style={styles.simpleBlock}>
+          <Text style={styles.simpleLabel}>Basit anlam</Text>
+          <Text style={styles.simpleText}>{getShortDefinition(content)}</Text>
+        </View>
+
+        <View style={styles.simpleBlock}>
+          <Text style={styles.simpleLabel}>Örnek cümle</Text>
+          <Text style={styles.simpleText}>{getExample(content)}</Text>
+        </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>AI lesson</Text>
+        <Text style={styles.sectionTitle}>Tekrar planı</Text>
 
-        <Text style={styles.helperText}>
-          Generate definitions, examples, Turkish meaning, collocations, common
-          mistakes, and a mini lesson for this word.
-        </Text>
-
-        {aiReady ? (
-          <Text style={styles.successText}>AI content is ready.</Text>
-        ) : (
-          <Text style={styles.warningText}>
-            AI content has not been generated yet.
+        <View style={styles.scheduleRow}>
+          <Text style={styles.scheduleLabel}>Sonraki tekrar</Text>
+          <Text style={styles.scheduleValue}>
+            {formatReviewDate(wordDetail.next_review_at)}
           </Text>
-        )}
-
-        <Pressable
-          style={[styles.button, generatingAi && styles.disabledButton]}
-          onPress={generateAiLesson}
-          disabled={generatingAi}
-        >
-          <Text style={styles.buttonText}>
-            {generatingAi ? "Generating..." : "Generate AI lesson"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Review status</Text>
-
-        <Text style={styles.helperText}>
-          Track how well you know this word. This is the first step toward a
-          review system.
-        </Text>
+        </View>
 
         <View style={styles.statusActions}>
           <StatusButton
@@ -406,16 +431,11 @@ export default function WordDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Personal note</Text>
-
-        <Text style={styles.helperText}>
-          Add your own memory trick, translation, example, or reminder for this
-          word.
-        </Text>
+        <Text style={styles.sectionTitle}>Kişisel not</Text>
 
         <TextInput
           style={styles.noteInput}
-          placeholder="Example: I saw this word in a reading passage about climate change."
+          placeholder="Kendi hafıza ipucun, çevirin veya örneğin..."
           multiline
           value={personalNote}
           onChangeText={setPersonalNote}
@@ -435,78 +455,39 @@ export default function WordDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Meaning</Text>
+        <Text style={styles.sectionTitle}>AI içeriği</Text>
 
-        <InfoRow
-          label="Simple definition"
-          value={renderTextValue(content.simple_definition)}
-        />
+        <Text style={styles.helperText}>
+          AI içeriği anlamları, örnekleri, quizleri ve pratik ekranlarını besler.
+        </Text>
 
-        <InfoRow
-          label="Academic definition"
-          value={renderTextValue(content.academic_definition)}
-        />
+        {aiReady ? (
+          <Text style={styles.successText}>AI içeriği hazır.</Text>
+        ) : (
+          <Text style={styles.warningText}>
+            Gelişmiş pratikten önce AI içeriği üret.
+          </Text>
+        )}
 
-        <InfoRow
-          label="Turkish meaning"
-          value={renderTextValue(content.turkish_meaning)}
-        />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Examples</Text>
-
-        <InfoRow
-          label="TOEFL / IELTS example"
-          value={renderTextValue(content.toefl_example)}
-        />
-
-        <InfoRow
-          label="Daily life example"
-          value={renderTextValue(content.daily_life_example)}
-        />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Usage</Text>
-
-        <InfoRow label="Synonyms" value={renderListValue(content.synonyms)} />
-
-        <InfoRow label="Antonyms" value={renderListValue(content.antonyms)} />
-
-        <InfoRow
-          label="Collocations"
-          value={renderListValue(content.collocations)}
-        />
-
-        <InfoRow
-          label="Common mistake"
-          value={renderTextValue(content.common_mistake)}
-        />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Learning</Text>
-
-        <InfoRow label="Mnemonic" value={renderTextValue(content.mnemonic)} />
-
-        <InfoRow
-          label="Mini lesson"
-          value={renderTextValue(content.mini_lesson)}
-        />
-
-        <InfoRow label="CEFR level" value={renderTextValue(content.cefr_level)} />
-
-        <InfoRow
-          label="Difficulty"
-          value={renderTextValue(content.difficulty_level)}
-        />
+        <Pressable
+          style={[styles.button, generatingAi && styles.disabledButton]}
+          onPress={generateAiLesson}
+          disabled={generatingAi}
+        >
+          <Text style={styles.buttonText}>
+            {generatingAi
+              ? "Generating..."
+              : aiReady
+                ? "AI içeriğini kontrol et"
+                : "AI üret"}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.dangerCard}>
-        <Text style={styles.dangerTitle}>Remove from my words</Text>
+        <Text style={styles.dangerTitle}>Kelimelerimden çıkar</Text>
         <Text style={styles.dangerText}>
-          This only removes the word from your personal vocabulary list.
+          Bu işlem kelimeyi sadece senin kişisel listenden çıkarır.
         </Text>
 
         <Pressable
@@ -515,25 +496,11 @@ export default function WordDetailScreen() {
           disabled={deleting}
         >
           <Text style={styles.dangerButtonText}>
-            {deleting ? "Removing..." : "Remove word"}
+            {deleting ? "Removing..." : "Kelimeyi çıkar"}
           </Text>
         </Pressable>
       </View>
     </ScrollView>
-  );
-}
-
-type InfoRowProps = {
-  label: string;
-  value: string;
-};
-
-function InfoRow({ label, value }: InfoRowProps) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
   );
 }
 
@@ -591,24 +558,92 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#2563eb",
   },
   heroCard: {
     backgroundColor: "#2563eb",
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 20,
+    borderRadius: 28,
+    padding: 26,
+    marginBottom: 18,
+  },
+  heroLabel: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#bfdbfe",
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   wordTitle: {
-    fontSize: 36,
-    fontWeight: "800",
+    fontSize: 42,
+    fontWeight: "900",
     color: "#ffffff",
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  wordMeta: {
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  heroBadge: {
+    backgroundColor: "#dbeafe",
+    color: "#1e3a8a",
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    overflow: "hidden",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  readyBadge: {
+    backgroundColor: "#dcfce7",
+    color: "#166534",
+  },
+  needsBadge: {
+    backgroundColor: "#fef3c7",
+    color: "#92400e",
+  },
+  meaningCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+  },
+  meaningLabel: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#2563eb",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  meaningText: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#0f172a",
+    lineHeight: 34,
+    marginBottom: 18,
+  },
+  simpleBlock: {
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    paddingTop: 14,
+    marginTop: 14,
+  },
+  simpleLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#475569",
+    marginBottom: 6,
+  },
+  simpleText: {
     fontSize: 16,
-    color: "#dbeafe",
+    color: "#0f172a",
+    lineHeight: 24,
   },
   card: {
     backgroundColor: "#ffffff",
@@ -620,31 +655,66 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#0f172a",
-    marginBottom: 14,
+    marginBottom: 10,
   },
   helperText: {
     fontSize: 15,
     color: "#64748b",
     lineHeight: 22,
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  successText: {
-    fontSize: 15,
-    color: "#166534",
-    backgroundColor: "#dcfce7",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+  actionList: {
+    gap: 10,
   },
-  warningText: {
-    fontSize: 15,
-    color: "#92400e",
-    backgroundColor: "#fef3c7",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+  actionButton: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: "#f8fafc",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  actionTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0f172a",
+    marginBottom: 4,
+  },
+  actionDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    lineHeight: 20,
+  },
+  actionChevron: {
+    fontSize: 30,
+    color: "#94a3b8",
+  },
+  scheduleRow: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginBottom: 14,
+  },
+  scheduleLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#64748b",
+    marginBottom: 4,
+  },
+  scheduleValue: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0f172a",
   },
   statusActions: {
     gap: 10,
@@ -663,7 +733,7 @@ const styles = StyleSheet.create({
   },
   statusButtonText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#475569",
   },
   activeStatusButtonText: {
@@ -676,7 +746,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   noteInput: {
-    minHeight: 120,
+    minHeight: 110,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#cbd5e1",
@@ -688,26 +758,38 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 12,
   },
-  infoRow: {
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    paddingTop: 14,
-    marginTop: 14,
-  },
-  infoLabel: {
-    fontSize: 14,
+  successText: {
+    fontSize: 15,
+    color: "#166534",
+    backgroundColor: "#dcfce7",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
     fontWeight: "700",
-    color: "#475569",
-    marginBottom: 6,
   },
-  infoValue: {
+  warningText: {
+    fontSize: 15,
+    color: "#92400e",
+    backgroundColor: "#fef3c7",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    fontWeight: "700",
+  },
+  button: {
+    backgroundColor: "#2563eb",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "#ffffff",
     fontSize: 16,
-    color: "#0f172a",
-    lineHeight: 24,
+    fontWeight: "800",
   },
   emptyTitle: {
     fontSize: 24,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#0f172a",
     marginBottom: 8,
   },
@@ -717,17 +799,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
     marginBottom: 20,
-  },
-  button: {
-    backgroundColor: "#2563eb",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
   },
   dangerCard: {
     backgroundColor: "#fef2f2",
@@ -739,7 +810,7 @@ const styles = StyleSheet.create({
   },
   dangerTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#991b1b",
     marginBottom: 8,
   },
@@ -758,7 +829,7 @@ const styles = StyleSheet.create({
   dangerButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   disabledButton: {
     opacity: 0.6,

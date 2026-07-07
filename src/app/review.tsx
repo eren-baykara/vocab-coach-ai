@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,7 @@ import { Stack, router } from "expo-router";
 
 import { supabase } from "../lib/supabase";
 
-type ReviewRating = "again" | "hard" | "good" | "easy";
+type ReviewRating = "again" | "good";
 
 type WordContent = {
   display_word: string | null;
@@ -33,72 +33,94 @@ type ReviewWord = {
   lapse_count: number | null;
   next_review_at: string | null;
   last_reviewed_at: string | null;
+  created_at: string;
   word_contents: WordContent | WordContent[] | null;
 };
 
+type QuizQuestion = {
+  word: string;
+  correctAnswer: string;
+  simpleMeaning: string;
+  example: string;
+  options: string[];
+};
+
+const REVIEW_SELECT = `
+  id,
+  status,
+  personal_note,
+  ease_factor,
+  interval_days,
+  repetition_count,
+  lapse_count,
+  next_review_at,
+  last_reviewed_at,
+  created_at,
+  word_contents (
+    display_word,
+    simple_definition,
+    turkish_meaning,
+    toefl_example,
+    daily_life_example,
+    mini_lesson
+  )
+`;
+
+const FALLBACK_MEANINGS = [
+  "genellikle",
+  "nadiren",
+  "geliştirmek",
+  "karşılaştırmak",
+  "açıklamak",
+  "desteklemek",
+  "azalmak",
+  "artmak",
+];
+
 export default function ReviewScreen() {
   const [loading, setLoading] = useState(true);
-  const [savingRating, setSavingRating] = useState(false);
-  const [showAnswer, setShowAnswer] = useState(false);
+  const [savingResult, setSavingResult] = useState(false);
 
-  const [reviewWords, setReviewWords] = useState<ReviewWord[]>([]);
+  const [practiceWords, setPracticeWords] = useState<ReviewWord[]>([]);
+  const [allWords, setAllWords] = useState<ReviewWord[]>([]);
   const [initialCount, setInitialCount] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
 
-  const loadReviewWords = useCallback(async () => {
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [lastWasCorrect, setLastWasCorrect] = useState<boolean | null>(null);
+
+  const loadPracticeWords = useCallback(async () => {
     setLoading(true);
 
     const { data, error } = await supabase
       .from("user_words")
-      .select(
-        `
-        id,
-        status,
-        personal_note,
-        ease_factor,
-        interval_days,
-        repetition_count,
-        lapse_count,
-        next_review_at,
-        last_reviewed_at,
-        word_contents (
-          display_word,
-          simple_definition,
-          turkish_meaning,
-          toefl_example,
-          daily_life_example,
-          mini_lesson
-        )
-      `
-      )
+      .select(REVIEW_SELECT)
       .order("next_review_at", { ascending: true, nullsFirst: true });
 
     setLoading(false);
 
     if (error) {
-      Alert.alert("Could not load review words", error.message);
+      Alert.alert("Could not load practice", error.message);
       return;
     }
 
-    const now = new Date();
+    const typedWords = ((data ?? []) as ReviewWord[]).filter(hasUsableMeaning);
 
-    const dueWords = ((data ?? []) as ReviewWord[])
-      .filter((item) => {
-        if (!item.next_review_at) return true;
+    const dueWords = typedWords.filter(isDue);
+    const notDueWords = typedWords.filter((item) => !isDue(item));
+    const orderedPracticeWords = [...dueWords, ...notDueWords].slice(0, 20);
 
-        return new Date(item.next_review_at) <= now;
-      })
-      .slice(0, 20);
-
-    setReviewWords(dueWords);
-    setInitialCount(dueWords.length);
+    setAllWords(typedWords);
+    setPracticeWords(orderedPracticeWords);
+    setInitialCount(orderedPracticeWords.length);
     setCompletedCount(0);
-    setShowAnswer(false);
+    setSelectedAnswer(null);
+    setLastWasCorrect(null);
   }, []);
 
   useEffect(() => {
-    loadReviewWords();
-  }, [loadReviewWords]);
+    loadPracticeWords();
+  }, [loadPracticeWords]);
 
   function getContent(item: ReviewWord) {
     return Array.isArray(item.word_contents)
@@ -106,92 +128,141 @@ export default function ReviewScreen() {
       : item.word_contents;
   }
 
-  function renderValue(value: string | null | undefined) {
-    if (!value) {
-      return "Not generated yet";
-    }
-
-    return value;
-  }
-
-  function hasAiContent(item: ReviewWord) {
+  function getDisplayWord(item: ReviewWord) {
     const content = getContent(item);
 
-    return Boolean(content?.simple_definition || content?.mini_lesson);
+    return content?.display_word ?? "Untitled word";
   }
 
-  async function submitReview(rating: ReviewRating) {
-    const currentWord = reviewWords[0];
+  function getCorrectMeaning(item: ReviewWord) {
+    const content = getContent(item);
 
-    if (!currentWord) return;
+    return (
+      content?.turkish_meaning ||
+      content?.simple_definition ||
+      "Meaning has not been generated yet."
+    );
+  }
 
-    setSavingRating(true);
+  function getSimpleMeaning(item: ReviewWord) {
+    const content = getContent(item);
 
-    const updatePayload = calculateReviewUpdate(currentWord, rating);
+    return content?.simple_definition || "Simple meaning has not been generated yet.";
+  }
+
+  function getExample(item: ReviewWord) {
+    const content = getContent(item);
+
+    return (
+      content?.daily_life_example ||
+      content?.toefl_example ||
+      "Example sentence has not been generated yet."
+    );
+  }
+
+  async function submitAnswer() {
+    const currentWord = practiceWords[0];
+
+    if (!currentWord || !selectedAnswer || !question) return;
+
+    const isCorrect = selectedAnswer === question.correctAnswer;
+
+    setLastWasCorrect(isCorrect);
+    setSavingResult(true);
+
+    const updatePayload = calculateReviewUpdate(
+      currentWord,
+      isCorrect ? "good" : "again"
+    );
 
     const { error } = await supabase
       .from("user_words")
       .update(updatePayload)
       .eq("id", currentWord.id);
 
-    setSavingRating(false);
+    setSavingResult(false);
 
     if (error) {
-      Alert.alert("Could not save review", error.message);
+      Alert.alert("Could not save answer", error.message);
       return;
     }
+  }
+
+  function goToNextQuestion() {
+    const currentWord = practiceWords[0];
+
+    if (!currentWord) return;
 
     setCompletedCount((count) => count + 1);
 
-    setReviewWords((items) => {
+    setPracticeWords((items) => {
       const remainingWords = items.slice(1);
 
-      if (rating === "again" || rating === "hard") {
+      if (lastWasCorrect === false) {
         return [...remainingWords, currentWord];
       }
 
       return remainingWords;
     });
 
-    setShowAnswer(false);
+    setSelectedAnswer(null);
+    setLastWasCorrect(null);
   }
 
-  const currentWord = reviewWords[0];
-  const content = currentWord ? getContent(currentWord) : null;
+  const currentWord = practiceWords[0];
+
+  const question = useMemo(() => {
+    if (!currentWord) return null;
+
+    return buildQuizQuestion(currentWord, allWords);
+  }, [currentWord, allWords]);
+
   const progressText =
-    initialCount > 0 ? `${completedCount}/${initialCount} reviewed` : "No due words";
+    initialCount > 0
+      ? `${completedCount} done • ${practiceWords.length} left`
+      : "No practice words";
 
   if (loading) {
     return (
       <View style={styles.centeredContainer}>
-        <Stack.Screen options={{ title: "Review" }} />
+        <Stack.Screen options={{ title: "Practice" }} />
         <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading review session...</Text>
+        <Text style={styles.loadingText}>Loading practice...</Text>
       </View>
     );
   }
 
-  if (!currentWord || !content) {
+  if (!currentWord || !question) {
+    const completedSomething = completedCount > 0;
+
     return (
       <View style={styles.centeredContainer}>
-        <Stack.Screen options={{ title: "Review" }} />
+        <Stack.Screen options={{ title: "Practice" }} />
 
-        <Text style={styles.emptyTitle}>All caught up</Text>
+        <Text style={styles.emptyTitle}>
+          {completedSomething ? "Practice complete" : "No practice words yet"}
+        </Text>
+
         <Text style={styles.emptyText}>
-          You do not have any due words right now. Add more words or come back
-          after your next review date.
+          {completedSomething
+            ? `Nice work. You answered ${completedCount} question${
+                completedCount === 1 ? "" : "s"
+              }.`
+            : "Add words and generate AI content first. Then Practice will quiz your vocabulary list."}
         </Text>
 
         <Pressable style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Back to words</Text>
+          <Text style={styles.buttonText}>Back home</Text>
         </Pressable>
       </View>
     );
   }
 
+  const answerSubmitted = lastWasCorrect !== null;
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Review" }} />
+      <Stack.Screen options={{ title: "Practice" }} />
 
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backButtonText}>‹ Back</Text>
@@ -201,132 +272,177 @@ export default function ReviewScreen() {
         <Text style={styles.progressText}>{progressText}</Text>
       </View>
 
-      <View style={styles.wordCard}>
-        <Text style={styles.wordLabel}>Review this word</Text>
-        <Text style={styles.wordTitle}>{content.display_word}</Text>
-
-        <View style={styles.metaRow}>
-          <Text style={styles.metaBadge}>{currentWord.status ?? "new"}</Text>
-
-          <Text
-            style={[
-              styles.metaBadge,
-              hasAiContent(currentWord)
-                ? styles.aiReadyBadge
-                : styles.aiMissingBadge,
-            ]}
-          >
-            {hasAiContent(currentWord) ? "AI ready" : "Needs AI"}
-          </Text>
-        </View>
+      <View style={styles.quizCard}>
+        <Text style={styles.quizEyebrow}>Meaning quiz</Text>
+        <Text style={styles.questionText}>What does this word mean?</Text>
+        <Text style={styles.wordTitle}>{question.word}</Text>
       </View>
 
-      {!showAnswer ? (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Do you know how to use it?</Text>
-          <Text style={styles.helperText}>
-            Try to remember the meaning, Turkish translation, and one example
-            sentence before revealing the answer.
-          </Text>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Choose the meaning</Text>
 
-          <Pressable style={styles.button} onPress={() => setShowAnswer(true)}>
-            <Text style={styles.buttonText}>Show answer</Text>
-          </Pressable>
+        <View style={styles.optionList}>
+          {question.options.map((option) => {
+            const isSelected = selectedAnswer === option;
+            const isCorrect = option === question.correctAnswer;
+            const showCorrect = answerSubmitted && isCorrect;
+            const showWrong =
+              answerSubmitted && isSelected && !isCorrect;
+
+            return (
+              <Pressable
+                key={option}
+                style={[
+                  styles.optionButton,
+                  isSelected && styles.selectedOption,
+                  showCorrect && styles.correctOption,
+                  showWrong && styles.wrongOption,
+                ]}
+                onPress={() => {
+                  if (!answerSubmitted) {
+                    setSelectedAnswer(option);
+                  }
+                }}
+                disabled={answerSubmitted}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    isSelected && styles.selectedOptionText,
+                    showCorrect && styles.correctOptionText,
+                    showWrong && styles.wrongOptionText,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      ) : (
-        <>
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Answer</Text>
 
-            <InfoRow
-              label="Simple definition"
-              value={renderValue(content.simple_definition)}
-            />
+        {!answerSubmitted ? (
+          <Pressable
+            style={[
+              styles.button,
+              (!selectedAnswer || savingResult) && styles.disabledButton,
+            ]}
+            onPress={submitAnswer}
+            disabled={!selectedAnswer || savingResult}
+          >
+            <Text style={styles.buttonText}>
+              {savingResult ? "Checking..." : "Check answer"}
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={styles.resultBox}>
+            <Text
+              style={[
+                styles.resultTitle,
+                lastWasCorrect ? styles.correctText : styles.wrongText,
+              ]}
+            >
+              {lastWasCorrect ? "Correct" : "Not quite"}
+            </Text>
 
-            <InfoRow
-              label="Turkish meaning"
-              value={renderValue(content.turkish_meaning)}
-            />
+            <Text style={styles.resultMeaning}>
+              {question.word} = {question.correctAnswer}
+            </Text>
 
-            <InfoRow
-              label="TOEFL / IELTS example"
-              value={renderValue(content.toefl_example)}
-            />
-
-            <InfoRow
-              label="Daily life example"
-              value={renderValue(content.daily_life_example)}
-            />
-
-            <InfoRow label="Mini lesson" value={renderValue(content.mini_lesson)} />
-
-            {currentWord.personal_note ? (
-              <InfoRow label="Your note" value={currentWord.personal_note} />
-            ) : null}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>How did it feel?</Text>
-
-            <View style={styles.ratingList}>
-              <RatingButton
-                label="Again"
-                description="I forgot it."
-                disabled={savingRating}
-                onPress={() => submitReview("again")}
-              />
-
-              <RatingButton
-                label="Hard"
-                description="I remembered with effort."
-                disabled={savingRating}
-                onPress={() => submitReview("hard")}
-              />
-
-              <RatingButton
-                label="Good"
-                description="I knew it."
-                disabled={savingRating}
-                onPress={() => submitReview("good")}
-              />
-
-              <RatingButton
-                label="Easy"
-                description="I knew it immediately."
-                disabled={savingRating}
-                onPress={() => submitReview("easy")}
-              />
+            <View style={styles.resultBlock}>
+              <Text style={styles.resultLabel}>Basit anlam / Simple meaning</Text>
+              <Text style={styles.resultText}>{question.simpleMeaning}</Text>
             </View>
 
-            {savingRating ? (
-              <Text style={styles.savingText}>Saving review...</Text>
-            ) : null}
+            <View style={styles.resultBlock}>
+              <Text style={styles.resultLabel}>Örnek / Example</Text>
+              <Text style={styles.resultText}>{question.example}</Text>
+            </View>
+
+            <Pressable style={styles.button} onPress={goToNextQuestion}>
+              <Text style={styles.buttonText}>Next question</Text>
+            </Pressable>
           </View>
-        </>
-      )}
-
-      {!hasAiContent(currentWord) ? (
-        <View style={styles.warningCard}>
-          <Text style={styles.warningTitle}>AI content missing</Text>
-          <Text style={styles.warningText}>
-            This word is reviewable, but the lesson content is not generated yet.
-          </Text>
-
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={() =>
-              router.push({
-                pathname: "/word/[id]",
-                params: { id: currentWord.id },
-              })
-            }
-          >
-            <Text style={styles.secondaryButtonText}>Open word detail</Text>
-          </Pressable>
-        </View>
-      ) : null}
+        )}
+      </View>
     </ScrollView>
   );
+}
+
+function hasUsableMeaning(item: ReviewWord) {
+  const content = Array.isArray(item.word_contents)
+    ? item.word_contents[0]
+    : item.word_contents;
+
+  return Boolean(content?.turkish_meaning || content?.simple_definition);
+}
+
+function isDue(item: ReviewWord) {
+  if (!item.next_review_at) return true;
+
+  return new Date(item.next_review_at) <= new Date();
+}
+
+function buildQuizQuestion(
+  currentWord: ReviewWord,
+  allWords: ReviewWord[]
+): QuizQuestion {
+  const currentContent = Array.isArray(currentWord.word_contents)
+    ? currentWord.word_contents[0]
+    : currentWord.word_contents;
+
+  const correctAnswer =
+    currentContent?.turkish_meaning ||
+    currentContent?.simple_definition ||
+    "Meaning has not been generated yet.";
+
+  const otherMeanings = allWords
+    .filter((item) => item.id !== currentWord.id)
+    .map((item) => {
+      const content = Array.isArray(item.word_contents)
+        ? item.word_contents[0]
+        : item.word_contents;
+
+      return content?.turkish_meaning || content?.simple_definition || "";
+    })
+    .filter((item) => item.length > 0)
+    .filter((item) => item !== correctAnswer);
+
+  const combinedOptions = Array.from(
+    new Set([correctAnswer, ...otherMeanings, ...FALLBACK_MEANINGS])
+  ).slice(0, 4);
+
+  const stableOptions = sortOptionsStable(
+    combinedOptions,
+    currentWord.id
+  );
+
+  return {
+    word: currentContent?.display_word ?? "Untitled word",
+    correctAnswer,
+    simpleMeaning:
+      currentContent?.simple_definition ||
+      "Simple meaning has not been generated yet.",
+    example:
+      currentContent?.daily_life_example ||
+      currentContent?.toefl_example ||
+      "Example sentence has not been generated yet.",
+    options: stableOptions,
+  };
+}
+
+function sortOptionsStable(options: string[], seed: string) {
+  return [...options].sort((a, b) => {
+    const scoreA = stableScore(`${seed}-${a}`);
+    const scoreB = stableScore(`${seed}-${b}`);
+
+    return scoreA - scoreB;
+  });
+}
+
+function stableScore(value: string) {
+  return value.split("").reduce((total, char) => {
+    return total + char.charCodeAt(0);
+  }, 0);
 }
 
 function calculateReviewUpdate(word: ReviewWord, rating: ReviewRating) {
@@ -349,14 +465,8 @@ function calculateReviewUpdate(word: ReviewWord, rating: ReviewRating) {
     status = "learning";
   }
 
-  if (rating === "hard") {
-    easeFactor = Math.max(1.3, currentEase - 0.15);
-    intervalDays = Math.max(1, Math.round(currentInterval * 1.2) || 1);
-    status = "learning";
-  }
-
   if (rating === "good") {
-    easeFactor = currentEase;
+    easeFactor = Math.min(3.0, currentEase + 0.05);
 
     if (currentRepetitions === 0) {
       intervalDays = 1;
@@ -367,23 +477,6 @@ function calculateReviewUpdate(word: ReviewWord, rating: ReviewRating) {
     }
 
     status = intervalDays >= 7 ? "mastered" : "learning";
-  }
-
-  if (rating === "easy") {
-    easeFactor = Math.min(3.0, currentEase + 0.15);
-
-    if (currentRepetitions === 0) {
-      intervalDays = 3;
-    } else if (currentRepetitions === 1) {
-      intervalDays = 7;
-    } else {
-      intervalDays = Math.max(
-        7,
-        Math.round(currentInterval * easeFactor * 1.3)
-      );
-    }
-
-    status = "mastered";
   }
 
   return {
@@ -402,49 +495,6 @@ function getNextReviewDate(intervalDays: number) {
   date.setDate(date.getDate() + intervalDays);
 
   return date.toISOString();
-}
-
-type InfoRowProps = {
-  label: string;
-  value: string;
-};
-
-function InfoRow({ label, value }: InfoRowProps) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
-type RatingButtonProps = {
-  label: string;
-  description: string;
-  disabled: boolean;
-  onPress: () => void;
-};
-
-function RatingButton({
-  label,
-  description,
-  disabled,
-  onPress,
-}: RatingButtonProps) {
-  return (
-    <Pressable
-      style={[styles.ratingButton, disabled && styles.disabledButton]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <View>
-        <Text style={styles.ratingTitle}>{label}</Text>
-        <Text style={styles.ratingDescription}>{description}</Text>
-      </View>
-
-      <Text style={styles.ratingChevron}>›</Text>
-    </Pressable>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -471,7 +521,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#2563eb",
   },
   progressCard: {
@@ -484,52 +534,36 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#475569",
     textAlign: "center",
   },
-  wordCard: {
+  quizCard: {
     backgroundColor: "#2563eb",
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 28,
+    padding: 26,
     marginBottom: 20,
+    minHeight: 210,
+    justifyContent: "center",
   },
-  wordLabel: {
-    fontSize: 14,
-    fontWeight: "700",
+  quizEyebrow: {
+    fontSize: 13,
+    fontWeight: "900",
     color: "#bfdbfe",
-    marginBottom: 8,
+    marginBottom: 10,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  questionText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#dbeafe",
+    marginBottom: 10,
   },
   wordTitle: {
-    fontSize: 38,
-    fontWeight: "800",
+    fontSize: 44,
+    fontWeight: "900",
     color: "#ffffff",
-    marginBottom: 14,
-  },
-  metaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  metaBadge: {
-    backgroundColor: "#dbeafe",
-    color: "#1e3a8a",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    overflow: "hidden",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  aiReadyBadge: {
-    backgroundColor: "#dcfce7",
-    color: "#166534",
-  },
-  aiMissingBadge: {
-    backgroundColor: "#fef3c7",
-    color: "#92400e",
   },
   card: {
     backgroundColor: "#ffffff",
@@ -541,120 +575,114 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "900",
     color: "#0f172a",
     marginBottom: 14,
   },
-  helperText: {
-    fontSize: 15,
-    color: "#64748b",
-    lineHeight: 22,
-    marginBottom: 14,
+  optionList: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  optionButton: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: "#f8fafc",
+  },
+  selectedOption: {
+    borderColor: "#2563eb",
+    backgroundColor: "#eff6ff",
+  },
+  correctOption: {
+    borderColor: "#16a34a",
+    backgroundColor: "#dcfce7",
+  },
+  wrongOption: {
+    borderColor: "#dc2626",
+    backgroundColor: "#fef2f2",
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a",
+    lineHeight: 23,
+  },
+  selectedOptionText: {
+    color: "#1d4ed8",
+  },
+  correctOptionText: {
+    color: "#166534",
+  },
+  wrongOptionText: {
+    color: "#991b1b",
   },
   button: {
     backgroundColor: "#2563eb",
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 15,
     alignItems: "center",
   },
   buttonText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "900",
   },
-  infoRow: {
+  resultBox: {
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",
-    paddingTop: 14,
-    marginTop: 14,
+    paddingTop: 16,
+    marginTop: 4,
   },
-  infoLabel: {
+  resultTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
+  correctText: {
+    color: "#166534",
+  },
+  wrongText: {
+    color: "#991b1b",
+  },
+  resultMeaning: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#0f172a",
+    lineHeight: 28,
+    marginBottom: 14,
+  },
+  resultBlock: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  resultLabel: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "900",
     color: "#475569",
     marginBottom: 6,
   },
-  infoValue: {
+  resultText: {
     fontSize: 16,
     color: "#0f172a",
-    lineHeight: 24,
-  },
-  ratingList: {
-    gap: 10,
-  },
-  ratingButton: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: "#f8fafc",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  ratingTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 4,
-  },
-  ratingDescription: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  ratingChevron: {
-    fontSize: 28,
-    color: "#94a3b8",
-  },
-  savingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#64748b",
-    textAlign: "center",
-  },
-  warningCard: {
-    backgroundColor: "#fef3c7",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#fde68a",
-  },
-  warningTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#92400e",
-    marginBottom: 8,
-  },
-  warningText: {
-    fontSize: 15,
-    color: "#92400e",
-    lineHeight: 22,
-    marginBottom: 14,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: "#92400e",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  secondaryButtonText: {
-    color: "#92400e",
-    fontSize: 16,
-    fontWeight: "700",
+    lineHeight: 23,
   },
   emptyTitle: {
-    fontSize: 26,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "900",
     color: "#0f172a",
     marginBottom: 8,
+    textAlign: "center",
   },
   emptyText: {
     fontSize: 16,
     color: "#64748b",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 23,
     marginBottom: 20,
   },
   disabledButton: {
