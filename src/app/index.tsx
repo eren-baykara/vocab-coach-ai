@@ -549,8 +549,32 @@ export default function HomeScreen() {
     });
   }
 
-  function countWordsInSet(setId: string) {
-    return setItems.filter((item) => item.set_id === setId).length;
+  function getWordsForSet(setId: string | null) {
+    if (!setId) return words;
+
+    const selectedWordIds = new Set(
+      setItems
+        .filter((item) => item.set_id === setId)
+        .map((item) => item.user_word_id)
+    );
+
+    return words.filter((item) => selectedWordIds.has(item.id));
+  }
+
+  function getSetStats(setId: string | null) {
+    const scopedWords = getWordsForSet(setId);
+    const readyWords = scopedWords.filter(hasAiContent);
+    const dueWords = readyWords.filter(isDue);
+
+    return {
+      total: scopedWords.length,
+      ready: readyWords.length,
+      due: dueWords.length,
+    };
+  }
+
+  function formatSetStats(stats: { total: number; ready: number; due: number }) {
+    return `${stats.total} words • ${stats.ready} ready • ${stats.due} today`;
   }
 
   const selectedSet = sets.find((set) => set.id === selectedSetId) ?? null;
@@ -560,16 +584,10 @@ export default function HomeScreen() {
   }, [selectedSet?.id, selectedSet?.name]);
 
   const visibleWords = useMemo(() => {
-    if (!selectedSetId) return words;
-
-    const selectedWordIds = new Set(
-      setItems
-        .filter((item) => item.set_id === selectedSetId)
-        .map((item) => item.user_word_id)
-    );
-
-    return words.filter((item) => selectedWordIds.has(item.id));
+    return getWordsForSet(selectedSetId);
   }, [words, setItems, selectedSetId]);
+
+  const libraryStats = getSetStats(null);
 
   const aiReadyCount = visibleWords.filter(hasAiContent).length;
   const meaningReadyCount = visibleWords.filter(hasMeaningPracticeContent).length;
@@ -597,8 +615,8 @@ export default function HomeScreen() {
       : aiReadyCount === 0
         ? "Open a word and generate AI content before practicing."
         : dueCount === 0
-          ? `Nothing is due in ${practiceScopeLabel} right now.`
-          : `Practice the words due now in ${practiceScopeLabel}.`;
+          ? `No scheduled review in ${practiceScopeLabel} right now.`
+          : `Practice today’s review words in ${practiceScopeLabel}.`;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -731,12 +749,13 @@ export default function HomeScreen() {
                 selectedSetId === null && styles.activeSetChipMeta,
               ]}
             >
-              all saved words
+              {formatSetStats(libraryStats)}
             </Text>
           </Pressable>
 
           {sets.map((set) => {
             const active = selectedSetId === set.id;
+            const stats = getSetStats(set.id);
 
             return (
               <Pressable
@@ -758,7 +777,7 @@ export default function HomeScreen() {
                     active && styles.activeSetChipMeta,
                   ]}
                 >
-                  {countWordsInSet(set.id)} words
+                  {formatSetStats(stats)}
                 </Text>
               </Pressable>
             );
@@ -1134,7 +1153,7 @@ function PracticeModeButton({
             : disabled
               ? disabledReason
               : readyCount > 0
-                ? `${readyCount} due now • ${totalReadyCount} ready`
+                ? `${readyCount} review today • ${totalReadyCount} ready`
                 : `Practice anytime • ${totalReadyCount} ready`}
         </Text>
       </View>
@@ -1178,7 +1197,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   setChip: {
-    minWidth: 130,
+    minWidth: 190,
     backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#e2e8f0",
@@ -1199,7 +1218,8 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   setChipMeta: {
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "700",
     color: "#64748b",
   },
