@@ -12,7 +12,7 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
-import { supabase } from "../lib/supabase";
+import { supabase } from "../../lib/supabase";
 
 type WordContent = {
   display_word: string | null;
