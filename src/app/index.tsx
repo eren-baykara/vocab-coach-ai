@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { router } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../lib/supabase";
@@ -176,6 +177,13 @@ export default function HomeScreen() {
     return content?.display_word ?? "Untitled word";
   }
 
+  function openWordDetail(item: UserWord) {
+    router.push({
+      pathname: "/word/[id]",
+      params: { id: item.id },
+    });
+  }
+
   if (initialLoading) {
     return (
       <View style={styles.centeredContainer}>
@@ -295,10 +303,18 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.wordList}>
             {words.map((item) => (
-              <View key={item.id} style={styles.wordItem}>
-                <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
-                <Text style={styles.statusText}>{item.status ?? "new"}</Text>
-              </View>
+              <Pressable
+                key={item.id}
+                style={styles.wordItem}
+                onPress={() => openWordDetail(item)}
+              >
+                <View>
+                  <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
+                  <Text style={styles.statusText}>{item.status ?? "new"}</Text>
+                </View>
+
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
             ))}
           </View>
         )}
@@ -439,6 +455,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     backgroundColor: "#f8fafc",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   wordText: {
     fontSize: 18,
@@ -449,5 +468,9 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 14,
     color: "#64748b",
+  },
+  chevron: {
+    fontSize: 30,
+    color: "#94a3b8",
   },
 });
