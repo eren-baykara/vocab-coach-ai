@@ -13,6 +13,8 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 
 import { supabase } from "../../lib/supabase";
 
+type WordStatus = "new" | "learning" | "mastered";
+
 type WordContent = {
   display_word: string | null;
   normalized_word: string | null;
@@ -41,12 +43,39 @@ type UserWordDetail = {
   word_contents: WordContent | WordContent[] | null;
 };
 
+const WORD_DETAIL_SELECT = `
+  id,
+  status,
+  personal_note,
+  created_at,
+  next_review_at,
+  last_reviewed_at,
+  word_contents (
+    display_word,
+    normalized_word,
+    simple_definition,
+    academic_definition,
+    turkish_meaning,
+    toefl_example,
+    daily_life_example,
+    synonyms,
+    antonyms,
+    collocations,
+    common_mistake,
+    mnemonic,
+    mini_lesson,
+    cefr_level,
+    difficulty_level
+  )
+`;
+
 export default function WordDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
 
   const [wordDetail, setWordDetail] = useState<UserWordDetail | null>(null);
   const [personalNote, setPersonalNote] = useState("");
@@ -58,33 +87,7 @@ export default function WordDetailScreen() {
 
     const { data, error } = await supabase
       .from("user_words")
-      .select(
-        `
-        id,
-        status,
-        personal_note,
-        created_at,
-        next_review_at,
-        last_reviewed_at,
-        word_contents (
-          display_word,
-          normalized_word,
-          simple_definition,
-          academic_definition,
-          turkish_meaning,
-          toefl_example,
-          daily_life_example,
-          synonyms,
-          antonyms,
-          collocations,
-          common_mistake,
-          mnemonic,
-          mini_lesson,
-          cefr_level,
-          difficulty_level
-        )
-      `
-      )
+      .select(WORD_DETAIL_SELECT)
       .eq("id", id)
       .single();
 
@@ -129,6 +132,30 @@ export default function WordDetailScreen() {
     return value.join(", ");
   }
 
+  async function updateWordStatus(newStatus: WordStatus) {
+    if (!id || !wordDetail) return;
+
+    setSavingStatus(true);
+
+    const { data, error } = await supabase
+      .from("user_words")
+      .update({
+        status: newStatus,
+      })
+      .eq("id", id)
+      .select(WORD_DETAIL_SELECT)
+      .single();
+
+    setSavingStatus(false);
+
+    if (error) {
+      Alert.alert("Could not update status", error.message);
+      return;
+    }
+
+    setWordDetail(data as UserWordDetail);
+  }
+
   async function savePersonalNote() {
     if (!id || !wordDetail) return;
 
@@ -142,33 +169,7 @@ export default function WordDetailScreen() {
         personal_note: cleanNote.length > 0 ? cleanNote : null,
       })
       .eq("id", id)
-      .select(
-        `
-        id,
-        status,
-        personal_note,
-        created_at,
-        next_review_at,
-        last_reviewed_at,
-        word_contents (
-          display_word,
-          normalized_word,
-          simple_definition,
-          academic_definition,
-          turkish_meaning,
-          toefl_example,
-          daily_life_example,
-          synonyms,
-          antonyms,
-          collocations,
-          common_mistake,
-          mnemonic,
-          mini_lesson,
-          cefr_level,
-          difficulty_level
-        )
-      `
-      )
+      .select(WORD_DETAIL_SELECT)
       .single();
 
     setSavingNote(false);
@@ -223,6 +224,7 @@ export default function WordDetailScreen() {
 
   const content = getContent();
   const title = content?.display_word ?? "Word detail";
+  const currentStatus = (wordDetail?.status ?? "new") as WordStatus;
 
   if (loading) {
     return (
@@ -260,7 +262,43 @@ export default function WordDetailScreen() {
 
       <View style={styles.heroCard}>
         <Text style={styles.wordTitle}>{content.display_word}</Text>
-        <Text style={styles.wordMeta}>Status: {wordDetail.status ?? "new"}</Text>
+        <Text style={styles.wordMeta}>Status: {currentStatus}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Review status</Text>
+
+        <Text style={styles.helperText}>
+          Track how well you know this word. This is the first step toward a
+          review system.
+        </Text>
+
+        <View style={styles.statusActions}>
+          <StatusButton
+            label="New"
+            active={currentStatus === "new"}
+            disabled={savingStatus}
+            onPress={() => updateWordStatus("new")}
+          />
+
+          <StatusButton
+            label="Learning"
+            active={currentStatus === "learning"}
+            disabled={savingStatus}
+            onPress={() => updateWordStatus("learning")}
+          />
+
+          <StatusButton
+            label="Mastered"
+            active={currentStatus === "mastered"}
+            disabled={savingStatus}
+            onPress={() => updateWordStatus("mastered")}
+          />
+        </View>
+
+        {savingStatus ? (
+          <Text style={styles.savingText}>Updating status...</Text>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -395,6 +433,36 @@ function InfoRow({ label, value }: InfoRowProps) {
   );
 }
 
+type StatusButtonProps = {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onPress: () => void;
+};
+
+function StatusButton({ label, active, disabled, onPress }: StatusButtonProps) {
+  return (
+    <Pressable
+      style={[
+        styles.statusButton,
+        active && styles.activeStatusButton,
+        disabled && styles.disabledButton,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text
+        style={[
+          styles.statusButtonText,
+          active && styles.activeStatusButtonText,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -457,6 +525,35 @@ const styles = StyleSheet.create({
     color: "#64748b",
     lineHeight: 22,
     marginBottom: 12,
+  },
+  statusActions: {
+    gap: 10,
+  },
+  statusButton: {
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+  },
+  activeStatusButton: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+  },
+  statusButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  activeStatusButtonText: {
+    color: "#1d4ed8",
+  },
+  savingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
   },
   noteInput: {
     minHeight: 120,
