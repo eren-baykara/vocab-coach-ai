@@ -43,6 +43,19 @@ type UserWordDetail = {
   word_contents: WordContent | WordContent[] | null;
 };
 
+type WordSet = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
+
+type WordSetItem = {
+  id: string;
+  set_id: string;
+  user_word_id: string;
+};
+
 const WORD_DETAIL_SELECT = `
   id,
   status,
@@ -74,13 +87,17 @@ export default function WordDetailScreen() {
   const id = typeof params.id === "string" ? params.id : undefined;
 
   const [loading, setLoading] = useState(true);
+  const [setsLoading, setSetsLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
+  const [savingSetChange, setSavingSetChange] = useState(false);
 
   const [wordDetail, setWordDetail] = useState<UserWordDetail | null>(null);
   const [personalNote, setPersonalNote] = useState("");
+  const [sets, setSets] = useState<WordSet[]>([]);
+  const [wordSetItems, setWordSetItems] = useState<WordSetItem[]>([]);
 
   const loadWordDetail = useCallback(async () => {
     if (!id) return;
@@ -106,9 +123,42 @@ export default function WordDetailScreen() {
     setPersonalNote(typedData.personal_note ?? "");
   }, [id]);
 
+  const loadSetsForWord = useCallback(async () => {
+    if (!id) return;
+
+    setSetsLoading(true);
+
+    const { data: setsData, error: setsError } = await supabase
+      .from("word_sets")
+      .select("id, name, description, created_at")
+      .order("created_at", { ascending: true });
+
+    if (setsError) {
+      setSetsLoading(false);
+      Alert.alert("Could not load sets", setsError.message);
+      return;
+    }
+
+    const { data: itemsData, error: itemsError } = await supabase
+      .from("word_set_items")
+      .select("id, set_id, user_word_id")
+      .eq("user_word_id", id);
+
+    setSetsLoading(false);
+
+    if (itemsError) {
+      Alert.alert("Could not load word sets", itemsError.message);
+      return;
+    }
+
+    setSets((setsData ?? []) as WordSet[]);
+    setWordSetItems((itemsData ?? []) as WordSetItem[]);
+  }, [id]);
+
   useEffect(() => {
     loadWordDetail();
-  }, [loadWordDetail]);
+    loadSetsForWord();
+  }, [loadWordDetail, loadSetsForWord]);
 
   function getContent() {
     if (!wordDetail) return null;
@@ -161,6 +211,77 @@ export default function WordDetailScreen() {
       day: "numeric",
       year: "numeric",
     });
+  }
+
+  function getSetsForThisWord() {
+    const setIds = new Set(wordSetItems.map((item) => item.set_id));
+
+    return sets.filter((set) => setIds.has(set.id));
+  }
+
+  function getAvailableSetsForThisWord() {
+    const setIds = new Set(wordSetItems.map((item) => item.set_id));
+
+    return sets.filter((set) => !setIds.has(set.id));
+  }
+
+  async function addWordToSet(setId: string) {
+    if (!id) return;
+
+    setSavingSetChange(true);
+
+    const { error } = await supabase.from("word_set_items").insert({
+      set_id: setId,
+      user_word_id: id,
+    });
+
+    setSavingSetChange(false);
+
+    if (error && error.code !== "23505") {
+      Alert.alert("Could not add to set", error.message);
+      return;
+    }
+
+    await loadSetsForWord();
+  }
+
+  function confirmRemoveFromSet(set: WordSet) {
+    Alert.alert(
+      "Remove from set?",
+      `Remove this word from "${set.name}"? The word will stay in Library.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => removeWordFromSet(set.id),
+        },
+      ]
+    );
+  }
+
+  async function removeWordFromSet(setId: string) {
+    if (!id) return;
+
+    setSavingSetChange(true);
+
+    const { error } = await supabase
+      .from("word_set_items")
+      .delete()
+      .eq("set_id", setId)
+      .eq("user_word_id", id);
+
+    setSavingSetChange(false);
+
+    if (error) {
+      Alert.alert("Could not remove from set", error.message);
+      return;
+    }
+
+    await loadSetsForWord();
   }
 
   async function generateAiLesson() {
@@ -289,7 +410,7 @@ export default function WordDetailScreen() {
   function confirmRemoveWord() {
     Alert.alert(
       "Remove word?",
-      "This will remove the word from your personal list. The shared word content will stay in the database.",
+      "This will remove the word from your Library and from every set. Shared AI content will stay in the database.",
       [
         {
           text: "Cancel",
@@ -325,6 +446,8 @@ export default function WordDetailScreen() {
   const title = content?.display_word ?? "Word detail";
   const currentStatus = (wordDetail?.status ?? "new") as WordStatus;
   const aiReady = content ? hasAiContent(content) : false;
+  const currentSets = getSetsForThisWord();
+  const availableSets = getAvailableSetsForThisWord();
 
   if (loading) {
     return (
@@ -390,6 +513,73 @@ export default function WordDetailScreen() {
           <Text style={styles.simpleLabel}>Örnek cümle</Text>
           <Text style={styles.simpleText}>{getExample(content)}</Text>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Sets</Text>
+
+          {setsLoading || savingSetChange ? (
+            <Text style={styles.inlineLoadingText}>Updating...</Text>
+          ) : null}
+        </View>
+
+        {currentSets.length === 0 ? (
+          <View style={styles.libraryOnlyBox}>
+            <Text style={styles.libraryOnlyTitle}>Library only</Text>
+            <Text style={styles.libraryOnlyText}>
+              This word is saved in your Library, but it is not inside a set yet.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.setMembershipList}>
+            {currentSets.map((set) => (
+              <View key={set.id} style={styles.setMembershipRow}>
+                <View style={styles.setMembershipTextWrap}>
+                  <Text style={styles.setMembershipTitle}>{set.name}</Text>
+                  <Text style={styles.setMembershipMeta}>In this set</Text>
+                </View>
+
+                <Pressable
+                  style={[
+                    styles.removeSetButton,
+                    savingSetChange && styles.disabledButton,
+                  ]}
+                  onPress={() => confirmRemoveFromSet(set)}
+                  disabled={savingSetChange}
+                >
+                  <Text style={styles.removeSetButtonText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {availableSets.length > 0 ? (
+          <View style={styles.addToSetBlock}>
+            <Text style={styles.smallSectionTitle}>Add to another set</Text>
+
+            <View style={styles.availableSetList}>
+              {availableSets.map((set) => (
+                <Pressable
+                  key={set.id}
+                  style={[
+                    styles.addSetChip,
+                    savingSetChange && styles.disabledButton,
+                  ]}
+                  onPress={() => addWordToSet(set.id)}
+                  disabled={savingSetChange}
+                >
+                  <Text style={styles.addSetChipText}>+ {set.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : sets.length === 0 ? (
+          <Text style={styles.helperText}>
+            Create sets from Home first, then you can organize this word.
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -485,9 +675,9 @@ export default function WordDetailScreen() {
       </View>
 
       <View style={styles.dangerCard}>
-        <Text style={styles.dangerTitle}>Kelimelerimden çıkar</Text>
+        <Text style={styles.dangerTitle}>Library’den çıkar</Text>
         <Text style={styles.dangerText}>
-          Bu işlem kelimeyi sadece senin kişisel listenden çıkarır.
+          Bu işlem kelimeyi Library’den ve bağlı olduğu tüm setlerden çıkarır.
         </Text>
 
         <Pressable
@@ -653,49 +843,118 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: "#0f172a",
     marginBottom: 10,
   },
-  helperText: {
-    fontSize: 15,
+  inlineLoadingText: {
     color: "#64748b",
-    lineHeight: 22,
-    marginBottom: 14,
+    fontSize: 13,
+    fontWeight: "800",
   },
-  actionList: {
-    gap: 10,
-  },
-  actionButton: {
+  libraryOnlyBox: {
+    backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 16,
     padding: 14,
-    backgroundColor: "#f8fafc",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    marginBottom: 14,
   },
-  actionTextWrap: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  actionTitle: {
+  libraryOnlyTitle: {
     fontSize: 16,
     fontWeight: "900",
     color: "#0f172a",
     marginBottom: 4,
   },
-  actionDescription: {
+  libraryOnlyText: {
     fontSize: 14,
     color: "#64748b",
     lineHeight: 20,
   },
-  actionChevron: {
-    fontSize: 30,
-    color: "#94a3b8",
+  setMembershipList: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  setMembershipRow: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  setMembershipTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  setMembershipTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0f172a",
+    marginBottom: 4,
+  },
+  setMembershipMeta: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+  },
+  removeSetButton: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  removeSetButtonText: {
+    color: "#991b1b",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  addToSetBlock: {
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    paddingTop: 14,
+  },
+  smallSectionTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#475569",
+    marginBottom: 10,
+  },
+  availableSetList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  addSetChip: {
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  addSetChipText: {
+    color: "#1d4ed8",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  helperText: {
+    fontSize: 15,
+    color: "#64748b",
+    lineHeight: 22,
+    marginBottom: 14,
   },
   scheduleRow: {
     backgroundColor: "#f8fafc",
