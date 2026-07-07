@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
@@ -45,7 +46,10 @@ export default function WordDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+
   const [wordDetail, setWordDetail] = useState<UserWordDetail | null>(null);
+  const [personalNote, setPersonalNote] = useState("");
 
   const loadWordDetail = useCallback(async () => {
     if (!id) return;
@@ -91,7 +95,10 @@ export default function WordDetailScreen() {
       return;
     }
 
-    setWordDetail(data as UserWordDetail);
+    const typedData = data as UserWordDetail;
+
+    setWordDetail(typedData);
+    setPersonalNote(typedData.personal_note ?? "");
   }, [id]);
 
   useEffect(() => {
@@ -120,6 +127,63 @@ export default function WordDetailScreen() {
     }
 
     return value.join(", ");
+  }
+
+  async function savePersonalNote() {
+    if (!id || !wordDetail) return;
+
+    setSavingNote(true);
+
+    const cleanNote = personalNote.trim();
+
+    const { data, error } = await supabase
+      .from("user_words")
+      .update({
+        personal_note: cleanNote.length > 0 ? cleanNote : null,
+      })
+      .eq("id", id)
+      .select(
+        `
+        id,
+        status,
+        personal_note,
+        created_at,
+        next_review_at,
+        last_reviewed_at,
+        word_contents (
+          display_word,
+          normalized_word,
+          simple_definition,
+          academic_definition,
+          turkish_meaning,
+          toefl_example,
+          daily_life_example,
+          synonyms,
+          antonyms,
+          collocations,
+          common_mistake,
+          mnemonic,
+          mini_lesson,
+          cefr_level,
+          difficulty_level
+        )
+      `
+      )
+      .single();
+
+    setSavingNote(false);
+
+    if (error) {
+      Alert.alert("Could not save note", error.message);
+      return;
+    }
+
+    const typedData = data as UserWordDetail;
+
+    setWordDetail(typedData);
+    setPersonalNote(typedData.personal_note ?? "");
+
+    Alert.alert("Saved", "Your personal note has been saved.");
   }
 
   function confirmRemoveWord() {
@@ -197,6 +261,35 @@ export default function WordDetailScreen() {
       <View style={styles.heroCard}>
         <Text style={styles.wordTitle}>{content.display_word}</Text>
         <Text style={styles.wordMeta}>Status: {wordDetail.status ?? "new"}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Personal note</Text>
+
+        <Text style={styles.helperText}>
+          Add your own memory trick, translation, example, or reminder for this
+          word.
+        </Text>
+
+        <TextInput
+          style={styles.noteInput}
+          placeholder="Example: I saw this word in a reading passage about climate change."
+          multiline
+          value={personalNote}
+          onChangeText={setPersonalNote}
+          editable={!savingNote}
+          textAlignVertical="top"
+        />
+
+        <Pressable
+          style={[styles.button, savingNote && styles.disabledButton]}
+          onPress={savePersonalNote}
+          disabled={savingNote}
+        >
+          <Text style={styles.buttonText}>
+            {savingNote ? "Saving..." : "Save note"}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.card}>
@@ -359,6 +452,25 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     marginBottom: 14,
   },
+  helperText: {
+    fontSize: 15,
+    color: "#64748b",
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  noteInput: {
+    minHeight: 120,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: "#0f172a",
+    lineHeight: 22,
+    marginBottom: 12,
+  },
   infoRow: {
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",
@@ -392,7 +504,6 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: "#2563eb",
     borderRadius: 14,
-    paddingHorizontal: 20,
     paddingVertical: 14,
     alignItems: "center",
   },
