@@ -11,6 +11,7 @@ import {
 import { Stack, router, useLocalSearchParams } from "expo-router";
 
 import { supabase } from "../lib/supabase";
+import { theme } from "../theme";
 
 type PracticeMode = "meaning" | "reverse" | "fill";
 type ReviewRating = "again" | "good";
@@ -141,7 +142,7 @@ export default function ReviewScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert("Could not load practice", error.message);
+      Alert.alert("Pratik yüklenemedi", error.message);
       return;
     }
 
@@ -157,7 +158,7 @@ export default function ReviewScreen() {
 
       if (setItemsError) {
         setLoading(false);
-        Alert.alert("Could not load set practice", setItemsError.message);
+        Alert.alert("Set pratiği yüklenemedi", setItemsError.message);
         return;
       }
 
@@ -208,7 +209,7 @@ export default function ReviewScreen() {
     setSavingResult(false);
 
     if (error) {
-      Alert.alert("Could not save answer", error.message);
+      Alert.alert("Cevap kaydedilemedi", error.message);
     }
   }
 
@@ -245,15 +246,15 @@ export default function ReviewScreen() {
 
   const progressText =
     initialCount > 0
-      ? `${completedCount} done • ${practiceWords.length} left`
-      : "No practice words";
+      ? `${completedCount} tamamlandı • ${practiceWords.length} kaldı`
+      : "Pratik kelimesi yok";
 
   if (loading) {
     return (
       <View style={styles.centeredContainer}>
         <Stack.Screen options={{ title: modeTitle }} />
         <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading practice...</Text>
+        <Text style={styles.loadingText}>Sorular hazırlanıyor...</Text>
       </View>
     );
   }
@@ -266,7 +267,7 @@ export default function ReviewScreen() {
         <Stack.Screen options={{ title: modeTitle }} />
 
         <Text style={styles.emptyTitle}>
-          {completedSomething ? "Practice complete" : "No practice words yet"}
+          {completedSomething ? "Pratik tamamlandı" : "Henüz pratik kelimesi yok"}
         </Text>
 
         <Text style={styles.emptyText}>
@@ -280,119 +281,169 @@ export default function ReviewScreen() {
         </Text>
 
         <Pressable style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Back home</Text>
+          <Text style={styles.buttonText}>Geri dön</Text>
         </Pressable>
       </View>
     );
   }
 
   const answerSubmitted = lastWasCorrect !== null;
+  const questionNumber = initialCount > 0 ? completedCount + 1 : 0;
+  const progressPercent =
+    initialCount > 0 ? Math.min((questionNumber / initialCount) * 100, 100) : 0;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: modeTitle }} />
+    <ScrollView
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backButtonText}>‹ Back</Text>
-      </Pressable>
+      <View style={styles.topBar}>
+        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+          <Text style={styles.iconButtonText}>‹</Text>
+        </Pressable>
 
-      <View style={styles.progressCard}>
-        <Text style={styles.progressText}>
-          {selectedSetName ? `${selectedSetName} • ${progressText}` : progressText}
-        </Text>
+        <View style={styles.topTitleBlock}>
+          <Text style={styles.modeTitle}>{modeTitle}</Text>
+          <Text style={styles.scopeText} numberOfLines={1}>
+            {selectedSetName ? selectedSetName : "Kelimelerim"}
+          </Text>
+        </View>
+
+        <View style={styles.scorePill}>
+          <Text style={styles.scorePillText}>
+            {questionNumber}/{initialCount}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.quizCard}>
-        <Text style={styles.quizEyebrow}>{modeTitle}</Text>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+      </View>
+
+      <Text style={styles.progressText}>{progressText}</Text>
+
+      <View style={styles.questionCard}>
+        <View style={styles.questionHeader}>
+          <Text style={styles.quizEyebrow}>{getChoiceSectionTitle(question.mode)}</Text>
+          <View style={styles.aiPill}>
+            <Text style={styles.aiPillText}>AI</Text>
+          </View>
+        </View>
+
         <Text style={styles.questionText}>{question.prompt}</Text>
         <Text style={styles.wordTitle}>{question.title}</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{getChoiceSectionTitle(question.mode)}</Text>
+      <View style={styles.optionList}>
+        {question.options.map((option, index) => {
+          const isSelected = selectedAnswer === option;
+          const isCorrect = option === question.correctAnswer;
+          const showCorrect = answerSubmitted && isCorrect;
+          const showWrong = answerSubmitted && isSelected && !isCorrect;
 
-        <View style={styles.optionList}>
-          {question.options.map((option) => {
-            const isSelected = selectedAnswer === option;
-            const isCorrect = option === question.correctAnswer;
-            const showCorrect = answerSubmitted && isCorrect;
-            const showWrong = answerSubmitted && isSelected && !isCorrect;
-
-            return (
-              <Pressable
-                key={option}
+          return (
+            <Pressable
+              key={option}
+              style={[
+                styles.optionButton,
+                isSelected && styles.selectedOption,
+                showCorrect && styles.correctOption,
+                showWrong && styles.wrongOption,
+              ]}
+              onPress={() => {
+                if (!answerSubmitted) {
+                  setSelectedAnswer(option);
+                }
+              }}
+              disabled={answerSubmitted}
+            >
+              <View
                 style={[
-                  styles.optionButton,
-                  isSelected && styles.selectedOption,
-                  showCorrect && styles.correctOption,
-                  showWrong && styles.wrongOption,
+                  styles.optionIndex,
+                  isSelected && styles.selectedOptionIndex,
+                  showCorrect && styles.correctOptionIndex,
+                  showWrong && styles.wrongOptionIndex,
                 ]}
-                onPress={() => {
-                  if (!answerSubmitted) {
-                    setSelectedAnswer(option);
-                  }
-                }}
-                disabled={answerSubmitted}
               >
                 <Text
                   style={[
-                    styles.optionText,
-                    isSelected && styles.selectedOptionText,
-                    showCorrect && styles.correctOptionText,
-                    showWrong && styles.wrongOptionText,
+                    styles.optionIndexText,
+                    isSelected && styles.selectedOptionIndexText,
+                    showCorrect && styles.correctOptionIndexText,
+                    showWrong && styles.wrongOptionIndexText,
                   ]}
                 >
-                  {option}
+                  {showCorrect ? "✓" : showWrong ? "×" : String.fromCharCode(65 + index)}
                 </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+              </View>
 
-        {!answerSubmitted ? (
-          <Pressable
-            style={[
-              styles.button,
-              (!selectedAnswer || savingResult) && styles.disabledButton,
-            ]}
-            onPress={submitAnswer}
-            disabled={!selectedAnswer || savingResult}
-          >
-            <Text style={styles.buttonText}>
-              {savingResult ? "Checking..." : "Check answer"}
-            </Text>
-          </Pressable>
-        ) : (
-          <View style={styles.resultBox}>
-            <Text
-              style={[
-                styles.resultTitle,
-                lastWasCorrect ? styles.correctText : styles.wrongText,
-              ]}
-            >
-              {lastWasCorrect ? "Correct" : "Not quite"}
-            </Text>
-
-            <Text style={styles.resultMeaning}>
-              Correct answer: {question.correctAnswer}
-            </Text>
-
-            <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Meaning</Text>
-              <Text style={styles.resultText}>{question.meaning}</Text>
-            </View>
-
-            <View style={styles.resultBlock}>
-              <Text style={styles.resultLabel}>Example</Text>
-              <Text style={styles.resultText}>{question.example}</Text>
-            </View>
-
-            <Pressable style={styles.button} onPress={goToNextQuestion}>
-              <Text style={styles.buttonText}>Next question</Text>
+              <Text
+                style={[
+                  styles.optionText,
+                  isSelected && styles.selectedOptionText,
+                  showCorrect && styles.correctOptionText,
+                  showWrong && styles.wrongOptionText,
+                ]}
+              >
+                {option}
+              </Text>
             </Pressable>
-          </View>
-        )}
+          );
+        })}
       </View>
+
+      {answerSubmitted ? (
+        <View
+          style={[
+            styles.feedbackCard,
+            lastWasCorrect ? styles.feedbackCorrect : styles.feedbackWrong,
+          ]}
+        >
+          <Text
+            style={[
+              styles.feedbackTitle,
+              lastWasCorrect ? styles.correctText : styles.wrongText,
+            ]}
+          >
+            {lastWasCorrect ? "Doğru!" : "Tekrar bakalım"}
+          </Text>
+
+          <Text style={styles.feedbackAnswer}>
+            Doğru cevap: {question.correctAnswer}
+          </Text>
+
+          <Text style={styles.feedbackMeaning}>{question.meaning}</Text>
+
+          <View style={styles.exampleBox}>
+            <Text style={styles.exampleLabel}>Örnek</Text>
+            <Text style={styles.exampleText}>{question.example}</Text>
+            {question.exampleTr ? (
+              <Text style={styles.exampleTranslation}>{question.exampleTr}</Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {!answerSubmitted ? (
+        <Pressable
+          style={[
+            styles.primaryButton,
+            (!selectedAnswer || savingResult) && styles.disabledButton,
+          ]}
+          onPress={submitAnswer}
+          disabled={!selectedAnswer || savingResult}
+        >
+          <Text style={styles.primaryButtonText}>
+            {savingResult ? "Kontrol ediliyor..." : "Cevabı Kontrol Et"}
+          </Text>
+        </Pressable>
+      ) : (
+        <Pressable style={styles.primaryButton} onPress={goToNextQuestion}>
+          <Text style={styles.primaryButtonText}>Sonraki Soru →</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
@@ -406,17 +457,17 @@ function normalizePracticeMode(value: string | string[] | undefined): PracticeMo
 }
 
 function getModeTitle(mode: PracticeMode) {
-  if (mode === "reverse") return "Reverse Quiz";
-  if (mode === "fill") return "Fill in the Blank";
+  if (mode === "reverse") return "Ters Test";
+  if (mode === "fill") return "Boşluk Doldurma";
 
-  return "Meaning Quiz";
+  return "Anlam Testi";
 }
 
 function getChoiceSectionTitle(mode: PracticeMode) {
-  if (mode === "reverse") return "Choose the word";
-  if (mode === "fill") return "Choose the missing word";
+  if (mode === "reverse") return "Doğru kelimeyi seç";
+  if (mode === "fill") return "Eksik kelimeyi seç";
 
-  return "Choose the meaning";
+  return "Doğru anlamı seç";
 }
 
 function getContent(item: ReviewWord) {
@@ -787,193 +838,321 @@ function getNextReviewDate(intervalDays: number) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 24,
-    backgroundColor: "#f8fafc",
+    paddingHorizontal: 20,
+    paddingTop: 54,
+    paddingBottom: 28,
+    backgroundColor: theme.colors.background,
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.background,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: "#475569",
+    color: theme.colors.textMuted,
+    fontWeight: "700",
   },
-  backButton: {
-    alignSelf: "flex-start",
-    marginBottom: 16,
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
   },
-  backButtonText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#2563eb",
-  },
-  progressCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  progressText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#475569",
-    textAlign: "center",
-  },
-  quizCard: {
-    backgroundColor: "#2563eb",
-    borderRadius: 28,
-    padding: 26,
-    marginBottom: 20,
-    minHeight: 210,
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surfaceSoft,
+    alignItems: "center",
     justifyContent: "center",
   },
-  quizEyebrow: {
-    fontSize: 13,
+  iconButtonText: {
+    color: theme.colors.text,
+    fontSize: 30,
+    fontWeight: "500",
+    lineHeight: 34,
+  },
+  topTitleBlock: {
+    flex: 1,
+  },
+  modeTitle: {
+    color: theme.colors.text,
+    fontSize: 18,
     fontWeight: "900",
-    color: "#bfdbfe",
+    marginBottom: 2,
+  },
+  scopeText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  scorePill: {
+    minWidth: 58,
+    height: 38,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primarySurface,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  scorePillText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  progressTrack: {
+    height: 7,
+    backgroundColor: theme.colors.surfaceSoft,
+    borderRadius: 999,
+    overflow: "hidden",
     marginBottom: 10,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+  },
+  progressText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 16,
+  },
+  questionCard: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 30,
+    padding: 24,
+    marginBottom: 18,
+    minHeight: 210,
+    justifyContent: "center",
+    overflow: "hidden",
+    ...theme.shadow.card,
+  },
+  questionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  quizEyebrow: {
+    color: "#FFE7D8",
+    fontSize: 12,
+    fontWeight: "900",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+  },
+  aiPill: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.26)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  aiPillText: {
+    color: theme.colors.textInverse,
+    fontSize: 11,
+    fontWeight: "900",
   },
   questionText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#dbeafe",
+    color: "#FFE7D8",
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 22,
     marginBottom: 10,
   },
   wordTitle: {
-    fontSize: 34,
+    color: theme.colors.textInverse,
+    fontSize: 31,
     fontWeight: "900",
-    color: "#ffffff",
-    lineHeight: 42,
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 14,
+    lineHeight: 39,
+    letterSpacing: -0.4,
   },
   optionList: {
-    gap: 10,
+    gap: 11,
     marginBottom: 16,
   },
   optionButton: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 16,
-    backgroundColor: "#f8fafc",
+    borderColor: theme.colors.border,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    ...theme.shadow.card,
   },
   selectedOption: {
-    borderColor: "#2563eb",
-    backgroundColor: "#eff6ff",
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySurface,
   },
   correctOption: {
-    borderColor: "#16a34a",
-    backgroundColor: "#dcfce7",
+    borderColor: theme.colors.success,
+    backgroundColor: theme.colors.successSoft,
   },
   wrongOption: {
-    borderColor: "#dc2626",
-    backgroundColor: "#fef2f2",
+    borderColor: theme.colors.danger,
+    backgroundColor: theme.colors.dangerSoft,
   },
-  optionText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0f172a",
-    lineHeight: 23,
-  },
-  selectedOptionText: {
-    color: "#1d4ed8",
-  },
-  correctOptionText: {
-    color: "#166534",
-  },
-  wrongOptionText: {
-    color: "#991b1b",
-  },
-  button: {
-    backgroundColor: "#2563eb",
-    borderRadius: 16,
-    paddingVertical: 15,
+  optionIndex: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surfaceSoft,
     alignItems: "center",
+    justifyContent: "center",
   },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "900",
+  selectedOptionIndex: {
+    backgroundColor: theme.colors.primary,
   },
-  resultBox: {
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    paddingTop: 16,
-    marginTop: 4,
+  correctOptionIndex: {
+    backgroundColor: theme.colors.success,
   },
-  resultTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    marginBottom: 8,
+  wrongOptionIndex: {
+    backgroundColor: theme.colors.danger,
   },
-  correctText: {
-    color: "#166534",
-  },
-  wrongText: {
-    color: "#991b1b",
-  },
-  resultMeaning: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#0f172a",
-    lineHeight: 28,
-    marginBottom: 14,
-  },
-  resultBlock: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  resultLabel: {
+  optionIndexText: {
+    color: theme.colors.textMuted,
     fontSize: 14,
     fontWeight: "900",
-    color: "#475569",
+  },
+  selectedOptionIndexText: {
+    color: theme.colors.textInverse,
+  },
+  correctOptionIndexText: {
+    color: theme.colors.textInverse,
+  },
+  wrongOptionIndexText: {
+    color: theme.colors.textInverse,
+  },
+  optionText: {
+    flex: 1,
+    color: theme.colors.text,
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: "900",
+  },
+  selectedOptionText: {
+    color: theme.colors.primaryDark,
+  },
+  correctOptionText: {
+    color: theme.colors.successDark,
+  },
+  wrongOptionText: {
+    color: theme.colors.dangerDark,
+  },
+  primaryButton: {
+    minHeight: 56,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    marginTop: 2,
+    ...theme.shadow.card,
+  },
+  primaryButtonText: {
+    color: theme.colors.textInverse,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  feedbackCard: {
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  feedbackCorrect: {
+    backgroundColor: theme.colors.successSoft,
+    borderColor: theme.colors.success,
+  },
+  feedbackWrong: {
+    backgroundColor: theme.colors.dangerSoft,
+    borderColor: theme.colors.danger,
+  },
+  feedbackTitle: {
+    fontSize: 21,
+    fontWeight: "900",
     marginBottom: 6,
   },
-  resultText: {
+  correctText: {
+    color: theme.colors.successDark,
+  },
+  wrongText: {
+    color: theme.colors.dangerDark,
+  },
+  feedbackAnswer: {
+    color: theme.colors.text,
     fontSize: 16,
-    color: "#0f172a",
+    fontWeight: "900",
     lineHeight: 23,
+    marginBottom: 8,
+  },
+  feedbackMeaning: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  exampleBox: {
+    backgroundColor: "rgba(255,255,255,0.5)",
+    borderRadius: 16,
+    padding: 14,
+  },
+  exampleLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  exampleText: {
+    color: theme.colors.text,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "800",
+  },
+  exampleTranslation: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
   },
   emptyTitle: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 8,
     textAlign: "center",
   },
   emptyText: {
     fontSize: 16,
-    color: "#64748b",
+    color: theme.colors.textMuted,
     textAlign: "center",
     lineHeight: 23,
     marginBottom: 20,
   },
+  button: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: theme.colors.textInverse,
+    fontSize: 16,
+    fontWeight: "900",
+  },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
 });
