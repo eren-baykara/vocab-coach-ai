@@ -788,133 +788,127 @@ export default function HomeScreen() {
     );
   }
 
+  const todayLabel = getTodayLabel();
+  const scopeLabel = selectedSet ? selectedSet.name : "Tüm kelimeler";
+  const readyPercent =
+    visibleWords.length > 0
+      ? Math.min(100, Math.round((aiReadyCount / visibleWords.length) * 100))
+      : 0;
+  const reviewPercent =
+    aiReadyCount > 0 ? Math.min(100, Math.round((dueCount / aiReadyCount) * 100)) : 0;
+  const featuredWord =
+    visibleWords.find(hasAiContent) ?? visibleWords[0] ?? words[0] ?? null;
+  const featuredWordText = featuredWord ? getDisplayWord(featuredWord) : "context";
+  const setCards = sets.slice(0, 2).map((set) => ({
+    set,
+    stats: getSetStats(set.id),
+  }));
+
   return (
     <>
       <Tabs.Screen options={{ tabBarStyle: VISIBLE_TAB_BAR_STYLE }} />
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Vocab Coach AI</Text>
-          <Text style={styles.subtitle}>Build sets. Practice words. Actually use them.</Text>
-        </View>
 
-        <Pressable style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutButtonText}>Sign out</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.wordsHeader}>
-          <Text style={styles.sectionTitle}>Choose a study set</Text>
-
-          <Pressable onPress={loadSets} disabled={setsLoading}>
-            <Text style={styles.refreshText}>
-              {setsLoading ? "Loading..." : "Refresh"}
-            </Text>
-          </Pressable>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.setList}
-        >
-          <Pressable
-            style={[
-              styles.setChip,
-              selectedSetId === null && styles.activeSetChip,
-            ]}
-            onPress={() => setSelectedSetId(null)}
-          >
-            <Text
-              style={[
-                styles.setChipTitle,
-                selectedSetId === null && styles.activeSetChipTitle,
-              ]}
-            >
-              Library
-            </Text>
-            <Text
-              style={[
-                styles.setChipMeta,
-                selectedSetId === null && styles.activeSetChipMeta,
-              ]}
-            >
-              {formatSetStats(libraryStats)}
-            </Text>
-          </Pressable>
-
-          {sets.map((set) => {
-            const active = selectedSetId === set.id;
-            const stats = getSetStats(set.id);
-
-            return (
-              <Pressable
-                key={set.id}
-                style={[styles.setChip, active && styles.activeSetChip]}
-                onPress={() => setSelectedSetId(set.id)}
-              >
-                <Text
-                  style={[
-                    styles.setChipTitle,
-                    active && styles.activeSetChipTitle,
-                  ]}
-                >
-                  {set.name}
-                </Text>
-                <Text
-                  style={[
-                    styles.setChipMeta,
-                    active && styles.activeSetChipMeta,
-                  ]}
-                >
-                  {formatSetStats(stats)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.setManagementHint}>
-          <Text style={styles.setManagementHintText}>
-            Create, rename, and delete sets from the Sets tab.
-          </Text>
-
-          <Pressable
-            style={styles.setManagementHintButton}
-            onPress={() => router.push("/sets" as never)}
-          >
-            <Text style={styles.setManagementHintButtonText}>Open Sets</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.practiceCard}>
-        <Text style={styles.practiceEyebrow}>
-          {selectedSet ? selectedSet.name : "All Words"}
-        </Text>
-        <Text style={styles.practiceTitle}>Study plan</Text>
-        <Text style={styles.practiceText}>{practiceSummaryText}</Text>
-
-        <View style={styles.practiceStatsRow}>
-          <View style={styles.practiceStatPill}>
-            <Text style={styles.practiceStatNumber}>{aiReadyCount}</Text>
-            <Text style={styles.practiceStatLabel}>ready</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.todayContainer}
+      >
+        <View style={styles.todayHeader}>
+          <View style={styles.todayHeaderText}>
+            <Text style={styles.todayDate}>{todayLabel}</Text>
+            <Text style={styles.todayGreeting}>Merhaba 👋</Text>
+            <Text style={styles.todaySubtitle}>Bugünün çalışması hazır.</Text>
           </View>
 
-          <View style={styles.practiceStatPill}>
-            <Text style={styles.practiceStatNumber}>{dueCount}</Text>
-            <Text style={styles.practiceStatLabel}>review today</Text>
+          <View style={styles.todayBellButton}>
+            <Text style={styles.todayBellIcon}>🔔</Text>
           </View>
         </View>
 
-        <View style={styles.studyBlock}>
-          <Text style={styles.studyLabel}>Study flow</Text>
+        <View style={styles.todayMetricGrid}>
+          <View style={styles.todayMetricCard}>
+            <Text style={styles.todayMetricIcon}>🔥</Text>
+            <Text style={styles.todayMetricValue}>{dueCount}</Text>
+            <Text style={styles.todayMetricLabel}>bugün</Text>
+          </View>
+
+          <View style={styles.todayMetricCard}>
+            <Text style={styles.todayMetricIcon}>📚</Text>
+            <Text style={styles.todayMetricValue}>{aiReadyCount}</Text>
+            <Text style={styles.todayMetricLabel}>hazır</Text>
+          </View>
+
+          <View style={styles.todayMetricCard}>
+            <Text style={styles.todayMetricIcon}>🎯</Text>
+            <Text style={styles.todayMetricValue}>{readyPercent}%</Text>
+            <Text style={styles.todayMetricLabel}>AI oranı</Text>
+          </View>
+        </View>
+
+        <View style={styles.todayGoalCard}>
+          <View style={styles.todayGoalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todayGoalTitle}>Günlük Odak</Text>
+              <Text style={styles.todayGoalText}>
+                {visibleWords.length === 0
+                  ? "Bugün çalışmak için kelime ekle."
+                  : `${scopeLabel} içinde ${dueCount} kelime tekrar bekliyor.`}
+              </Text>
+            </View>
+
+            <View style={styles.todayGoalBadge}>
+              <Text style={styles.todayGoalBadgeText}>{reviewPercent}%</Text>
+            </View>
+          </View>
+
+          <View style={styles.todayProgressTrack}>
+            <View
+              style={[
+                styles.todayProgressFill,
+                { width: `${Math.max(8, reviewPercent)}%` },
+              ]}
+            />
+          </View>
+
+          <View style={styles.todayGoalMetaRow}>
+            <Text style={styles.todayGoalMeta}>{dueCount} tekrar</Text>
+            <Text style={styles.todayGoalMeta}>{aiReadyCount} hazır kelime</Text>
+          </View>
+        </View>
+
+        <View style={styles.todayStudyCard}>
+          <View style={styles.todayStudyTopRow}>
+            <View style={styles.todayStudyIconWrap}>
+              <Text style={styles.todayStudyIcon}>⚡</Text>
+            </View>
+
+            <View style={styles.todayStudyTextWrap}>
+              <Text style={styles.todayStudyEyebrow}>{scopeLabel}</Text>
+              <Text style={styles.todayStudyTitle}>Bugünün Çalışması</Text>
+              <Text style={styles.todayStudyText}>
+                Önce kartları ayır, sonra quizlerle kelimeyi gerçekten kullanmayı
+                öğren.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.todayStudyPills}>
+            <View style={styles.todayStudyPill}>
+              <Text style={styles.todayStudyPillText}>{visibleWords.length} kart</Text>
+            </View>
+
+            <View style={styles.todayStudyPill}>
+              <Text style={styles.todayStudyPillText}>{dueCount} tekrar</Text>
+            </View>
+
+            <View style={styles.todayStudyPill}>
+              <Text style={styles.todayStudyPillText}>{aiReadyCount} AI hazır</Text>
+            </View>
+          </View>
 
           <Pressable
             style={[
-              styles.primaryStudyButton,
-              visibleWords.length === 0 && styles.disabledButton,
+              styles.todayPrimaryButton,
+              visibleWords.length === 0 && styles.todayPrimaryButtonDisabled,
             ]}
             onPress={() =>
               router.push({
@@ -929,194 +923,276 @@ export default function HomeScreen() {
             }
             disabled={visibleWords.length === 0}
           >
-            <View style={styles.practiceModeTextWrap}>
-              <Text style={styles.primaryStudyTitle}>Card Sort</Text>
-              <Text style={styles.primaryStudyDescription}>
-                First, separate known words from words you still need.
-              </Text>
-              <Text style={styles.primaryStudyMeta}>
-                {visibleWords.length > 0
-                  ? `${visibleWords.length} cards available`
-                  : "Add words first."}
-              </Text>
-            </View>
-
-            <Text style={styles.primaryStudyChevron}>›</Text>
+            <Text style={styles.todayPrimaryButtonText}>Çalışmaya Başla</Text>
+            <Text style={styles.todayPrimaryButtonArrow}>›</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.practiceModesHeading}>Practice modes</Text>
-
-        <View style={styles.modeList}>
-          <PracticeModeButton
-            title="Meaning Quiz"
-            description="See the word, choose the Turkish meaning."
-            readyCount={meaningDueCount}
-            totalReadyCount={meaningReadyCount}
-            disabled={meaningReadyCount === 0}
-            disabledReason={
-              visibleWords.length === 0
-                ? "Add words first."
-                : meaningReadyCount === 0
-                  ? "Generate AI content with Turkish meaning first."
-                  : "Nothing due right now."
-            }
-            onPress={() =>
-              router.push({
-                pathname: "/review",
-                params: selectedSet
-                  ? {
-                      setId: selectedSet.id,
-                      setName: selectedSet.name,
-                      mode: "meaning",
-                    }
-                  : { mode: "meaning" },
-              })
-            }
-          />
-
-          <PracticeModeButton
-            title="Reverse Quiz"
-            description="See the meaning, choose the word."
-            readyCount={reverseDueCount}
-            totalReadyCount={reverseReadyCount}
-            disabled={reverseReadyCount === 0}
-            disabledReason={
-              visibleWords.length === 0
-                ? "Add words first."
-                : reverseReadyCount === 0
-                  ? "Generate AI content first."
-                  : "Nothing due right now."
-            }
-            onPress={() =>
-              router.push({
-                pathname: "/review",
-                params: selectedSet
-                  ? {
-                      setId: selectedSet.id,
-                      setName: selectedSet.name,
-                      mode: "reverse",
-                    }
-                  : { mode: "reverse" },
-              })
-            }
-          />
-
-          <PracticeModeButton
-            title="Fill in the Blank"
-            description="Complete an example sentence."
-            readyCount={fillDueCount}
-            totalReadyCount={fillReadyCount}
-            disabled={fillReadyCount === 0}
-            disabledReason={
-              visibleWords.length === 0
-                ? "Add words first."
-                : fillReadyCount === 0
-                  ? "Generate AI example content first."
-                  : "Nothing due right now."
-            }
-            onPress={() =>
-              router.push({
-                pathname: "/review",
-                params: selectedSet
-                  ? {
-                      setId: selectedSet.id,
-                      setName: selectedSet.name,
-                      mode: "fill",
-                    }
-                  : { mode: "fill" },
-              })
-            }
-          />
-        </View>
-      </View>
-
-      <View style={styles.quickAddCard}>
-        <View style={styles.quickAddHeader}>
-          <View style={styles.quickAddTitleBlock}>
-            <Text style={styles.quickAddEyebrow}>Quick Add</Text>
-            <Text style={styles.quickAddTitle}>Add a word while it is fresh</Text>
+        <View style={styles.todayModesSection}>
+          <View style={styles.todaySectionHeader}>
+            <Text style={styles.todaySectionTitle}>Pratik Modları</Text>
+            <Text style={styles.todaySectionMeta}>{scopeLabel}</Text>
           </View>
 
-          <View style={styles.quickAddScopePill}>
-            <Text style={styles.quickAddScopeLabel}>Adds to</Text>
-            <Text style={styles.quickAddScopeValue} numberOfLines={1}>
-              {selectedSet ? selectedSet.name : "All Words"}
+          <View style={styles.todayModeGrid}>
+            <Pressable
+              style={[
+                styles.todayModeCard,
+                meaningReadyCount === 0 && styles.todayModeCardDisabled,
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: "/review",
+                  params: selectedSet
+                    ? {
+                        setId: selectedSet.id,
+                        setName: selectedSet.name,
+                        mode: "meaning",
+                      }
+                    : { mode: "meaning" },
+                })
+              }
+              disabled={meaningReadyCount === 0}
+            >
+              <Text style={styles.todayModeIcon}>🧠</Text>
+              <Text style={styles.todayModeTitle}>Anlam</Text>
+              <Text style={styles.todayModeMeta}>
+                {meaningDueCount > 0 ? `${meaningDueCount} bugün` : `${meaningReadyCount} hazır`}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.todayModeCard,
+                reverseReadyCount === 0 && styles.todayModeCardDisabled,
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: "/review",
+                  params: selectedSet
+                    ? {
+                        setId: selectedSet.id,
+                        setName: selectedSet.name,
+                        mode: "reverse",
+                      }
+                    : { mode: "reverse" },
+                })
+              }
+              disabled={reverseReadyCount === 0}
+            >
+              <Text style={styles.todayModeIcon}>🔁</Text>
+              <Text style={styles.todayModeTitle}>Ters Quiz</Text>
+              <Text style={styles.todayModeMeta}>
+                {reverseDueCount > 0 ? `${reverseDueCount} bugün` : `${reverseReadyCount} hazır`}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.todayModeCard,
+                fillReadyCount === 0 && styles.todayModeCardDisabled,
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: "/review",
+                  params: selectedSet
+                    ? {
+                        setId: selectedSet.id,
+                        setName: selectedSet.name,
+                        mode: "fill",
+                      }
+                    : { mode: "fill" },
+                })
+              }
+              disabled={fillReadyCount === 0}
+            >
+              <Text style={styles.todayModeIcon}>✍️</Text>
+              <Text style={styles.todayModeTitle}>Boşluk</Text>
+              <Text style={styles.todayModeMeta}>
+                {fillDueCount > 0 ? `${fillDueCount} bugün` : `${fillReadyCount} hazır`}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.todayTipCard}>
+          <View style={styles.todayTipIconWrap}>
+            <Text style={styles.todayTipIcon}>✨</Text>
+          </View>
+
+          <View style={styles.todayTipTextWrap}>
+            <Text style={styles.todayTipTitle}>AI Öğrenme İpucu</Text>
+            <Text style={styles.todayTipText}>
+              “{featuredWordText}” kelimesini sadece anlamıyla değil, örnek cümle
+              içinde nasıl kullanıldığını görerek çalış.
             </Text>
           </View>
         </View>
 
-        <Text style={styles.quickAddSubtitle}>
-          {selectedSet
-            ? "Saved to Library and linked to this set automatically."
-            : "Choose a set above to add it there, or save it only to Library."}
-        </Text>
+        <View style={styles.todaySetsSection}>
+          <View style={styles.todaySectionHeader}>
+            <Text style={styles.todaySectionTitle}>Aktif Setler</Text>
 
-        <TextInput
-          style={styles.quickAddInput}
-          placeholder="Type a word, e.g. usually"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={word}
-          onChangeText={setWord}
-          editable={!wordActionLoading}
-          onSubmitEditing={() => handleAddWord(false)}
-          returnKeyType="done"
-        />
+            <Pressable onPress={() => router.push("/sets" as never)}>
+              <Text style={styles.todaySectionAction}>Tümü →</Text>
+            </Pressable>
+          </View>
 
-        {wordSuggestions.length > 0 ? (
-          <View style={styles.suggestionsWrap}>
-            <Text style={styles.suggestionsLabel}>Already in Library</Text>
+          <View style={styles.todaySetList}>
+            <Pressable
+              style={[
+                styles.todaySetCard,
+                selectedSetId === null && styles.todaySetCardActive,
+              ]}
+              onPress={() => setSelectedSetId(null)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.todaySetTitle}>Tüm Kelimeler</Text>
+                <Text style={styles.todaySetMeta}>
+                  {libraryStats.total} kelime • {libraryStats.ready} hazır
+                </Text>
+              </View>
 
-            <View style={styles.suggestionList}>
+              <Text style={styles.todaySetPercent}>
+                {libraryStats.total > 0
+                  ? Math.round((libraryStats.ready / libraryStats.total) * 100)
+                  : 0}
+                %
+              </Text>
+            </Pressable>
+
+            {setCards.map(({ set, stats }) => (
+              <Pressable
+                key={set.id}
+                style={[
+                  styles.todaySetCard,
+                  selectedSetId === set.id && styles.todaySetCardActive,
+                ]}
+                onPress={() => setSelectedSetId(set.id)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.todaySetTitle}>{set.name}</Text>
+                  <Text style={styles.todaySetMeta}>
+                    {stats.total} kelime • {stats.due} bugün
+                  </Text>
+                </View>
+
+                <Text style={styles.todaySetPercent}>
+                  {stats.total > 0
+                    ? Math.round((stats.ready / stats.total) * 100)
+                    : 0}
+                  %
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.todayQuickAddCard}>
+          <View style={styles.todayQuickAddHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todayQuickAddEyebrow}>Hızlı Ekle</Text>
+              <Text style={styles.todayQuickAddTitle}>Yeni kelime ekle</Text>
+            </View>
+
+            <View style={styles.todayQuickAddScope}>
+              <Text style={styles.todayQuickAddScopeText} numberOfLines={1}>
+                {selectedSet ? selectedSet.name : "Kütüphane"}
+              </Text>
+            </View>
+          </View>
+
+          <TextInput
+            style={styles.todayQuickAddInput}
+            placeholder="Örn: usually"
+            placeholderTextColor={theme.colors.textSubtle}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={word}
+            onChangeText={setWord}
+            editable={!wordActionLoading}
+            onSubmitEditing={() => handleAddWord(false)}
+            returnKeyType="done"
+          />
+
+          {wordSuggestions.length > 0 ? (
+            <View style={styles.todaySuggestionsWrap}>
               {wordSuggestions.map((suggestion) => (
                 <Pressable
                   key={suggestion}
-                  style={styles.suggestionChip}
+                  style={styles.todaySuggestionChip}
                   onPress={() => setWord(suggestion)}
                 >
-                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                  <Text style={styles.todaySuggestionText}>{suggestion}</Text>
                 </Pressable>
               ))}
             </View>
+          ) : null}
+
+          <View style={styles.todayQuickAddActions}>
+            <Pressable
+              style={[
+                styles.todayQuickAddPrimary,
+                wordActionLoading && styles.todayPrimaryButtonDisabled,
+              ]}
+              onPress={() => handleAddWord(true)}
+              disabled={wordActionLoading}
+            >
+              <Text style={styles.todayQuickAddPrimaryText}>
+                {addingWordWithAi ? "AI hazırlanıyor..." : "Ekle + AI Oluştur"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.todayQuickAddSecondary,
+                wordActionLoading && styles.todayPrimaryButtonDisabled,
+              ]}
+              onPress={() => handleAddWord(false)}
+              disabled={wordActionLoading}
+            >
+              <Text style={styles.todayQuickAddSecondaryText}>
+                {addingWord ? "Ekleniyor..." : "Sadece Ekle"}
+              </Text>
+            </Pressable>
           </View>
-        ) : null}
-
-        <View style={styles.quickAddActions}>
-          <Pressable
-            style={[
-              styles.quickAddPrimaryButton,
-              wordActionLoading && styles.disabledButton,
-            ]}
-            onPress={() => handleAddWord(true)}
-            disabled={wordActionLoading}
-          >
-            <Text style={styles.quickAddPrimaryButtonText}>
-              {addingWordWithAi ? "Generating..." : "Add + Generate AI"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.quickAddSecondaryButton,
-              wordActionLoading && styles.disabledButton,
-            ]}
-            onPress={() => handleAddWord(false)}
-            disabled={wordActionLoading}
-          >
-            <Text style={styles.quickAddSecondaryButtonText}>
-              {addingWord ? "Adding..." : "Add only"}
-            </Text>
-          </Pressable>
         </View>
-
-        <Text style={styles.quickAddTip}>
-          AI generation prepares meanings, examples, and practice questions.
-        </Text>
-      </View>
       </ScrollView>
     </>
   );
+}
+
+function getTodayLabel() {
+  const days = [
+    "Pazar",
+    "Pazartesi",
+    "Salı",
+    "Çarşamba",
+    "Perşembe",
+    "Cuma",
+    "Cumartesi",
+  ];
+
+  const months = [
+    "Ocak",
+    "Şubat",
+    "Mart",
+    "Nisan",
+    "Mayıs",
+    "Haziran",
+    "Temmuz",
+    "Ağustos",
+    "Eylül",
+    "Ekim",
+    "Kasım",
+    "Aralık",
+  ];
+
+  const today = new Date();
+
+  return `${days[today.getDay()]}, ${today.getDate()} ${
+    months[today.getMonth()]
+  }`;
 }
 
 
@@ -1197,6 +1273,471 @@ function PracticeModeButton(props: any) {
 
 
 const styles = StyleSheet.create({
+  todayContainer: {
+    flexGrow: 1,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: 62,
+    paddingBottom: 118,
+    backgroundColor: theme.colors.background,
+  },
+  todayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: theme.spacing.xl,
+  },
+  todayHeaderText: {
+    flex: 1,
+    paddingRight: theme.spacing.md,
+  },
+  todayDate: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: theme.spacing.xs,
+  },
+  todayGreeting: {
+    color: theme.colors.text,
+    fontSize: 32,
+    fontWeight: "900",
+    lineHeight: 38,
+  },
+  todaySubtitle: {
+    marginTop: theme.spacing.xs,
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  todayBellButton: {
+    width: 46,
+    height: 46,
+    borderRadius: theme.radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card,
+  },
+  todayBellIcon: {
+    fontSize: 19,
+  },
+  todayMetricGrid: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+  },
+  todayMetricCard: {
+    flex: 1,
+    minHeight: 98,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card,
+  },
+  todayMetricIcon: {
+    fontSize: 19,
+    marginBottom: theme.spacing.sm,
+  },
+  todayMetricValue: {
+    color: theme.colors.text,
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 28,
+  },
+  todayMetricLabel: {
+    marginTop: 2,
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  todayGoalCard: {
+    borderRadius: theme.radius["2xl"],
+    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginBottom: theme.spacing.lg,
+    ...theme.shadow.card,
+  },
+  todayGoalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+  },
+  todayGoalTitle: {
+    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 25,
+  },
+  todayGoalText: {
+    marginTop: theme.spacing.xs,
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  todayGoalBadge: {
+    minWidth: 52,
+    height: 34,
+    borderRadius: theme.radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.primarySurface,
+  },
+  todayGoalBadgeText: {
+    color: theme.colors.primary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  todayProgressTrack: {
+    height: 10,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceSoft,
+    overflow: "hidden",
+    marginTop: theme.spacing.lg,
+  },
+  todayProgressFill: {
+    height: "100%",
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
+  },
+  todayGoalMetaRow: {
+    marginTop: theme.spacing.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+  },
+  todayGoalMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  todayStudyCard: {
+    borderRadius: theme.radius["3xl"],
+    padding: theme.spacing.xl,
+    backgroundColor: theme.colors.primary,
+    marginBottom: theme.spacing.xl,
+    shadowColor: "#3D2A20",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  todayStudyTopRow: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+  },
+  todayStudyIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  todayStudyIcon: {
+    fontSize: 22,
+  },
+  todayStudyTextWrap: {
+    flex: 1,
+  },
+  todayStudyEyebrow: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: theme.spacing.xs,
+  },
+  todayStudyTitle: {
+    color: theme.colors.textInverse,
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 30,
+  },
+  todayStudyText: {
+    marginTop: theme.spacing.sm,
+    color: "rgba(255,255,255,0.86)",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 21,
+  },
+  todayStudyPills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.lg,
+  },
+  todayStudyPill: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  todayStudyPillText: {
+    color: theme.colors.textInverse,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  todayPrimaryButton: {
+    height: 52,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.sm,
+  },
+  todayPrimaryButtonDisabled: {
+    opacity: 0.55,
+  },
+  todayPrimaryButtonText: {
+    color: theme.colors.primary,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  todayPrimaryButtonArrow: {
+    color: theme.colors.primary,
+    fontSize: 26,
+    fontWeight: "900",
+    marginTop: -2,
+  },
+  todayModesSection: {
+    marginBottom: theme.spacing.xl,
+  },
+  todaySectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  todaySectionTitle: {
+    color: theme.colors.text,
+    fontSize: 21,
+    fontWeight: "900",
+  },
+  todaySectionMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  todaySectionAction: {
+    color: theme.colors.primary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  todayModeGrid: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  todayModeCard: {
+    flex: 1,
+    minHeight: 122,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card,
+  },
+  todayModeCardDisabled: {
+    opacity: 0.48,
+  },
+  todayModeIcon: {
+    fontSize: 21,
+    marginBottom: theme.spacing.md,
+  },
+  todayModeTitle: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 19,
+  },
+  todayModeMeta: {
+    marginTop: theme.spacing.xs,
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  todayTipCard: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    borderRadius: theme.radius["2xl"],
+    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.accentSoft,
+    marginBottom: theme.spacing.xl,
+  },
+  todayTipIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: theme.radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface,
+  },
+  todayTipIcon: {
+    fontSize: 19,
+  },
+  todayTipTextWrap: {
+    flex: 1,
+  },
+  todayTipTitle: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: theme.spacing.xs,
+  },
+  todayTipText: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 21,
+  },
+  todaySetsSection: {
+    marginBottom: theme.spacing.xl,
+  },
+  todaySetList: {
+    gap: theme.spacing.md,
+  },
+  todaySetCard: {
+    minHeight: 72,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+  },
+  todaySetCardActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySurface,
+  },
+  todaySetTitle: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  todaySetMeta: {
+    marginTop: theme.spacing.xs,
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  todaySetPercent: {
+    color: theme.colors.primary,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  todayQuickAddCard: {
+    borderRadius: theme.radius["2xl"],
+    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card,
+  },
+  todayQuickAddHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  todayQuickAddEyebrow: {
+    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: theme.spacing.xs,
+  },
+  todayQuickAddTitle: {
+    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  todayQuickAddScope: {
+    maxWidth: 128,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surfaceSoft,
+  },
+  todayQuickAddScopeText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  todayQuickAddInput: {
+    height: 50,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.lg,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  todaySuggestionsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  todaySuggestionChip: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.primarySurface,
+  },
+  todaySuggestionText: {
+    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  todayQuickAddActions: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+  },
+  todayQuickAddPrimary: {
+    flex: 1.25,
+    height: 48,
+    borderRadius: theme.radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.primary,
+  },
+  todayQuickAddPrimaryText: {
+    color: theme.colors.textInverse,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  todayQuickAddSecondary: {
+    flex: 1,
+    height: 48,
+    borderRadius: theme.radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surfaceSoft,
+  },
+  todayQuickAddSecondaryText: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
   authRoot: {
     flex: 1,
     backgroundColor: theme.colors.background,
