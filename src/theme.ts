@@ -1,34 +1,37 @@
 export const theme = {
   colors: {
-    background: "#F8FAFC",
-    surface: "#FFFFFF",
-    surfaceSoft: "#F1F5F9",
-    surfaceMuted: "#F8FAFC",
+    background: "#F7F3EC",
+    surface: "#FFFCF7",
+    surfaceSoft: "#F1EADF",
+    surfaceMuted: "#FBF7F0",
 
-    border: "#E2E8F0",
-    borderStrong: "#CBD5E1",
+    border: "#E7DED2",
+    borderStrong: "#D8CABB",
 
-    text: "#0F172A",
-    textMuted: "#64748B",
-    textSubtle: "#94A3B8",
+    text: "#1F1A17",
+    textMuted: "#7B6D62",
+    textSubtle: "#A8988A",
     textInverse: "#FFFFFF",
 
-    primary: "#2563EB",
-    primaryDark: "#1D4ED8",
-    primarySoft: "#DBEAFE",
-    primarySurface: "#EFF6FF",
+    primary: "#BC5A2A",
+    primaryDark: "#9F4520",
+    primarySoft: "#F4D7C5",
+    primarySurface: "#FFF0E7",
 
-    success: "#16A34A",
-    successDark: "#15803D",
-    successSoft: "#DCFCE7",
+    accent: "#6B5AE6",
+    accentSoft: "#ECE9FF",
 
-    warning: "#D97706",
-    warningDark: "#B45309",
-    warningSoft: "#FEF3C7",
+    success: "#2E9E68",
+    successDark: "#237A50",
+    successSoft: "#DDF4E9",
 
-    danger: "#DC2626",
-    dangerDark: "#B91C1C",
-    dangerSoft: "#FEE2E2",
+    warning: "#C97920",
+    warningDark: "#A85F16",
+    warningSoft: "#FFF1D8",
+
+    danger: "#D44D3C",
+    dangerDark: "#A9372A",
+    dangerSoft: "#FFE3DE",
   },
 
   spacing: {
@@ -48,14 +51,15 @@ export const theme = {
     lg: 18,
     xl: 24,
     "2xl": 28,
+    "3xl": 34,
     pill: 999,
   },
 
   typography: {
     screenTitle: {
-      fontSize: 32,
+      fontSize: 30,
       fontWeight: "900" as const,
-      lineHeight: 38,
+      lineHeight: 36,
     },
     sectionTitle: {
       fontSize: 22,
@@ -92,10 +96,10 @@ export const theme = {
 
   shadow: {
     card: {
-      shadowColor: "#0F172A",
-      shadowOffset: { width: 0, height: 8 },
+      shadowColor: "#3D2A20",
+      shadowOffset: { width: 0, height: 10 },
       shadowOpacity: 0.08,
-      shadowRadius: 18,
+      shadowRadius: 20,
       elevation: 3,
     },
   },

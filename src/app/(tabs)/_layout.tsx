@@ -15,9 +15,9 @@ function TabIcon({
   return (
     <View
       style={{
-        width: 32,
-        height: 28,
-        borderRadius: theme.radius.pill,
+        width: 34,
+        height: 30,
+        borderRadius: theme.radius.md,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: focused ? theme.colors.primarySurface : "transparent",
@@ -26,9 +26,9 @@ function TabIcon({
       <Text
         style={{
           color,
-          fontSize: 17,
+          fontSize: 18,
           fontWeight: "900",
-          lineHeight: 20,
+          lineHeight: 22,
         }}
       >
         {icon}
@@ -45,7 +45,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSubtle,
         tabBarStyle: {
-          height: 80,
+          height: 82,
           paddingTop: 8,
           paddingBottom: 12,
           backgroundColor: theme.colors.surface,
@@ -54,7 +54,7 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: "900",
+          fontWeight: "800",
           marginTop: 2,
         },
       }}
@@ -62,9 +62,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Today",
+          title: "Bugün",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="●" color={color} focused={focused} />
+            <TabIcon icon="⌂" color={color} focused={focused} />
           ),
         }}
       />
@@ -72,9 +72,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sets"
         options={{
-          title: "Sets",
+          title: "Setler",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="◆" color={color} focused={focused} />
+            <TabIcon icon="▦" color={color} focused={focused} />
           ),
         }}
       />
@@ -82,9 +82,19 @@ export default function TabLayout() {
       <Tabs.Screen
         name="library"
         options={{
-          title: "Words",
+          title: "Kelimeler",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="■" color={color} focused={focused} />
+            <TabIcon icon="▤" color={color} focused={focused} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profil",
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon icon="○" color={color} focused={focused} />
           ),
         }}
       />
