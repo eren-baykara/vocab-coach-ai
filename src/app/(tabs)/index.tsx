@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,10 +11,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, Tabs, useFocusEffect } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
+import { theme } from "../../theme";
 
 type WordContent = {
   display_word: string | null;
@@ -88,12 +91,23 @@ const COMMON_WORD_SUGGESTIONS = [
   "therefore",
 ];
 
+const VISIBLE_TAB_BAR_STYLE = {
+  height: 82,
+  paddingTop: 8,
+  paddingBottom: 12,
+  backgroundColor: theme.colors.surface,
+  borderTopWidth: 1,
+  borderTopColor: theme.colors.border,
+} as const;
+
 export default function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const [authLoading, setAuthLoading] = useState(false);
   const [wordsLoading, setWordsLoading] = useState(false);
@@ -632,62 +646,153 @@ export default function HomeScreen() {
     return (
       <View style={styles.centeredContainer}>
         <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading Vocab Coach AI...</Text>
+        <Text style={styles.loadingText}>Kelimelik AI hazırlanıyor...</Text>
       </View>
     );
   }
 
   if (!session) {
+    const isLoginMode = authMode === "login";
+
     return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Vocab Coach AI</Text>
-          <Text style={styles.subtitle}>
-            Don't memorize words. Learn how to use them.
-          </Text>
+      <>
+        <Tabs.Screen options={{ tabBarStyle: { display: "none" } }} />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          <Pressable
-            style={[styles.button, authLoading && styles.disabledButton]}
-            onPress={handleSignIn}
-            disabled={authLoading}
+        <KeyboardAvoidingView
+          style={styles.authRoot}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.authScroll}
           >
-            <Text style={styles.buttonText}>
-              {authLoading ? "Please wait..." : "Log in"}
-            </Text>
-          </Pressable>
+            <View style={styles.authHero}>
+              <View style={styles.authLogo}>
+                <Text style={styles.authLogoText}>K</Text>
+              </View>
 
-          <Pressable
-            style={[styles.secondaryButton, authLoading && styles.disabledButton]}
-            onPress={handleSignUp}
-            disabled={authLoading}
-          >
-            <Text style={styles.secondaryButtonText}>Create account</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+              <Text style={styles.authBrandTitle}>Kelimelik AI</Text>
+              <Text style={styles.authMotto}>
+                Ezberleme. AI ile kullanmayı öğren.
+              </Text>
+            </View>
+
+            <View style={styles.authSheet}>
+              <View style={styles.authSegment}>
+                <Pressable
+                  style={[
+                    styles.authSegmentButton,
+                    isLoginMode && styles.authSegmentButtonActive,
+                  ]}
+                  onPress={() => setAuthMode("login")}
+                  disabled={authLoading}
+                >
+                  <Text
+                    style={[
+                      styles.authSegmentText,
+                      isLoginMode && styles.authSegmentTextActive,
+                    ]}
+                  >
+                    Giriş Yap
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.authSegmentButton,
+                    !isLoginMode && styles.authSegmentButtonActive,
+                  ]}
+                  onPress={() => setAuthMode("signup")}
+                  disabled={authLoading}
+                >
+                  <Text
+                    style={[
+                      styles.authSegmentText,
+                      !isLoginMode && styles.authSegmentTextActive,
+                    ]}
+                  >
+                    Kayıt Ol
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.authLabel}>E-POSTA</Text>
+              <TextInput
+                style={styles.authInput}
+                placeholder="ornek@kelimelik.ai"
+                placeholderTextColor={theme.colors.textSubtle}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                value={email}
+                onChangeText={setEmail}
+              />
+
+              <Text style={styles.authLabel}>ŞİFRE</Text>
+              <View style={styles.authPasswordRow}>
+                <TextInput
+                  style={styles.authPasswordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor={theme.colors.textSubtle}
+                  secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+
+                <Pressable
+                  style={styles.authPasswordToggle}
+                  onPress={() => setPasswordVisible((current) => !current)}
+                >
+                  <Text style={styles.authPasswordToggleText}>
+                    {passwordVisible ? "Gizle" : "Göster"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                style={[
+                  styles.authPrimaryButton,
+                  authLoading && styles.authPrimaryButtonDisabled,
+                ]}
+                onPress={isLoginMode ? handleSignIn : handleSignUp}
+                disabled={authLoading}
+              >
+                <Text style={styles.authPrimaryButtonText}>
+                  {authLoading
+                    ? "Lütfen bekle..."
+                    : isLoginMode
+                      ? "Giriş Yap"
+                      : "Hesap Oluştur"}
+                </Text>
+              </Pressable>
+
+              <View style={styles.authFooter}>
+                <Text style={styles.authFooterMuted}>
+                  {isLoginMode ? "Hesabın yok mu?" : "Zaten üyeysen"}
+                </Text>
+
+                <Pressable
+                  onPress={() => setAuthMode(isLoginMode ? "signup" : "login")}
+                  disabled={authLoading}
+                >
+                  <Text style={styles.authFooterAction}>
+                    {isLoginMode ? " Kayıt Ol →" : " Giriş Yap →"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.header}>
+    <>
+      <Tabs.Screen options={{ tabBarStyle: VISIBLE_TAB_BAR_STYLE }} />
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.header}>
         <View>
           <Text style={styles.title}>Vocab Coach AI</Text>
           <Text style={styles.subtitle}>Build sets. Practice words. Actually use them.</Text>
@@ -1009,57 +1114,253 @@ export default function HomeScreen() {
           AI generation prepares meanings, examples, and practice questions.
         </Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
-type PracticeModeButtonProps = {
-  title: string;
-  description: string;
-  readyCount: number;
-  totalReadyCount: number;
-  footerText?: string;
-  disabled: boolean;
-  disabledReason: string;
-  onPress: () => void;
-};
 
-function PracticeModeButton({
-  title,
-  description,
-  readyCount,
-  totalReadyCount,
-  footerText,
-  disabled,
-  disabledReason,
-  onPress,
-}: PracticeModeButtonProps) {
+function PracticeModeButton(props: any) {
+  const {
+    title,
+    subtitle,
+    meta,
+    count,
+    disabled,
+    loading,
+    onPress,
+  } = props;
+
+  const description = subtitle ?? meta ?? "";
+
   return (
     <Pressable
-      style={[styles.practiceModeButton, disabled && styles.disabledButton]}
+      style={[
+        styles.practiceModeButton,
+        disabled && { opacity: 0.48 },
+      ]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
     >
-      <View style={styles.practiceModeTextWrap}>
-        <Text style={styles.practiceModeTitle}>{title}</Text>
-        <Text style={styles.practiceModeDescription}>{description}</Text>
-        <Text style={styles.practiceModeDescription}>
-          {footerText
-            ? footerText
-            : disabled
-              ? disabledReason
-              : readyCount > 0
-                ? `${readyCount} review today • ${totalReadyCount} ready`
-                : `Practice anytime • ${totalReadyCount} ready`}
+      <View style={{ flex: 1, paddingRight: 12 }}>
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: 16,
+            fontWeight: "900",
+            lineHeight: 22,
+          }}
+        >
+          {title}
         </Text>
+
+        {description ? (
+          <Text
+            style={{
+              marginTop: 4,
+              color: theme.colors.textMuted,
+              fontSize: 13,
+              fontWeight: "700",
+              lineHeight: 18,
+            }}
+          >
+            {description}
+          </Text>
+        ) : null}
       </View>
 
-      <Text style={styles.practiceModeChevron}>›</Text>
+      {typeof count === "number" ? (
+        <View
+          style={{
+            minWidth: 34,
+            height: 34,
+            borderRadius: 999,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.colors.primarySurface,
+          }}
+        >
+          <Text
+            style={{
+              color: theme.colors.primary,
+              fontSize: 13,
+              fontWeight: "900",
+            }}
+          >
+            {count}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
 
+
 const styles = StyleSheet.create({
+  authRoot: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  authScroll: {
+    flexGrow: 1,
+    backgroundColor: theme.colors.background,
+  },
+  authHero: {
+    minHeight: 194,
+    paddingTop: 42,
+    paddingHorizontal: theme.spacing["2xl"],
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderBottomLeftRadius: theme.radius["3xl"],
+    borderBottomRightRadius: theme.radius["3xl"],
+  },
+  authLogo: {
+    width: 58,
+    height: 58,
+    borderRadius: theme.radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.34)",
+    marginBottom: theme.spacing.lg,
+  },
+  authLogoText: {
+    color: theme.colors.textInverse,
+    fontSize: 25,
+    fontWeight: "900",
+  },
+  authBrandTitle: {
+    color: theme.colors.textInverse,
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 30,
+  },
+  authMotto: {
+    marginTop: theme.spacing.sm,
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  authSheet: {
+    paddingTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing["3xl"],
+  },
+  authSegment: {
+    height: 42,
+    flexDirection: "row",
+    padding: 4,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceSoft,
+    marginBottom: theme.spacing.md,
+  },
+  authSegmentButton: {
+    flex: 1,
+    borderRadius: theme.radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  authSegmentButtonActive: {
+    backgroundColor: theme.colors.surface,
+    shadowColor: "#3D2A20",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  authSegmentText: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  authSegmentTextActive: {
+    color: theme.colors.text,
+  },
+  authLabel: {
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  authInput: {
+    height: 48,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surfaceMuted,
+    paddingHorizontal: theme.spacing.lg,
+    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  authPasswordRow: {
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingLeft: theme.spacing.lg,
+    paddingRight: theme.spacing.sm,
+  },
+  authPasswordInput: {
+    flex: 1,
+    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  authPasswordToggle: {
+    minWidth: 56,
+    height: 34,
+    borderRadius: theme.radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  authPasswordToggleText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  authPrimaryButton: {
+    height: 48,
+    borderRadius: theme.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.primary,
+    marginTop: theme.spacing.lg,
+    shadowColor: "#3D2A20",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  authPrimaryButtonDisabled: {
+    opacity: 0.65,
+  },
+  authPrimaryButtonText: {
+    color: theme.colors.textInverse,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  authFooter: {
+    marginTop: theme.spacing["2xl"],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  authFooterMuted: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  authFooterAction: {
+    color: theme.colors.primary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
