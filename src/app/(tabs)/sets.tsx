@@ -13,6 +13,7 @@ import { router, useFocusEffect } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
+import { theme } from "../../theme";
 
 type WordContent = {
   display_word: string | null;
@@ -43,6 +44,8 @@ type WordSetItem = {
   user_word_id: string;
 };
 
+type SetFilter = "all" | "active" | "completed";
+
 const WORD_SELECT = `
   id,
   status,
@@ -56,6 +59,12 @@ const WORD_SELECT = `
     mini_lesson
   )
 `;
+
+const SET_FILTERS: { key: SetFilter; label: string }[] = [
+  { key: "all", label: "Hepsi" },
+  { key: "active", label: "Aktif" },
+  { key: "completed", label: "Tamamlandı" },
+];
 
 export default function SetsScreen() {
   const [session, setSession] = useState<Session | null>(null);
@@ -75,6 +84,9 @@ export default function SetsScreen() {
   const [editingSetName, setEditingSetName] = useState("");
   const [expandedSetId, setExpandedSetId] = useState<string | null>(null);
   const [addWordSearch, setAddWordSearch] = useState("");
+  const [setSearchText, setSetSearchText] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState<SetFilter>("all");
+  const [showCreateBox, setShowCreateBox] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -113,17 +125,17 @@ export default function SetsScreen() {
     setSetsLoading(false);
 
     if (setsResult.error) {
-      Alert.alert("Could not load sets", setsResult.error.message);
+      Alert.alert("Setler yüklenemedi", setsResult.error.message);
       return;
     }
 
     if (itemsResult.error) {
-      Alert.alert("Could not load set words", itemsResult.error.message);
+      Alert.alert("Set kelimeleri yüklenemedi", itemsResult.error.message);
       return;
     }
 
     if (wordsResult.error) {
-      Alert.alert("Could not load words", wordsResult.error.message);
+      Alert.alert("Kelimeler yüklenemedi", wordsResult.error.message);
       return;
     }
 
@@ -152,6 +164,27 @@ export default function SetsScreen() {
 
   const expandedSet = sets.find((set) => set.id === expandedSetId) ?? null;
   const expandedSetWords = expandedSet ? getWordsForSet(expandedSet.id) : [];
+
+  const filteredSets = useMemo(() => {
+    const cleanSearch = setSearchText.trim().toLowerCase();
+
+    return sets.filter((set) => {
+      const stats = getSetStats(set.id);
+      const isCompleted = stats.total > 0 && stats.learned === stats.total;
+
+      const matchesSearch =
+        !cleanSearch ||
+        set.name.toLowerCase().includes(cleanSearch) ||
+        (set.description?.toLowerCase().includes(cleanSearch) ?? false);
+
+      const matchesFilter =
+        selectedFilter === "all" ||
+        (selectedFilter === "completed" && isCompleted) ||
+        (selectedFilter === "active" && !isCompleted);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [sets, setItems, words, setSearchText, selectedFilter]);
 
   const addableWords = useMemo(() => {
     if (!expandedSet) return [];
@@ -188,7 +221,7 @@ export default function SetsScreen() {
     const cleanName = newSetName.trim();
 
     if (!cleanName) {
-      Alert.alert("Missing set name", "Please enter a set name.");
+      Alert.alert("Set adı eksik", "Lütfen bir set adı gir.");
       return;
     }
 
@@ -205,11 +238,12 @@ export default function SetsScreen() {
     setCreatingSet(false);
 
     if (error) {
-      Alert.alert("Could not create set", error.message);
+      Alert.alert("Set oluşturulamadı", error.message);
       return;
     }
 
     setNewSetName("");
+    setShowCreateBox(false);
     setExpandedSetId(data.id);
     await loadSetsData();
   }
@@ -228,7 +262,7 @@ export default function SetsScreen() {
     const cleanName = editingSetName.trim();
 
     if (!cleanName) {
-      Alert.alert("Missing set name", "Set name cannot be empty.");
+      Alert.alert("Set adı eksik", "Set adı boş olamaz.");
       return;
     }
 
@@ -244,7 +278,7 @@ export default function SetsScreen() {
     setSavingRenameId(null);
 
     if (error) {
-      Alert.alert("Could not rename set", error.message);
+      Alert.alert("Set adı değiştirilemedi", error.message);
       return;
     }
 
@@ -254,12 +288,12 @@ export default function SetsScreen() {
 
   function confirmDeleteSet(set: WordSet) {
     Alert.alert(
-      "Delete set?",
-      `This will delete "${set.name}". Your words will stay in Library.`,
+      "Set silinsin mi?",
+      `"${set.name}" silinecek. Kelimelerin Library içinde kalır.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Vazgeç", style: "cancel" },
         {
-          text: "Delete set",
+          text: "Seti sil",
           style: "destructive",
           onPress: () => deleteSet(set),
         },
@@ -275,7 +309,7 @@ export default function SetsScreen() {
     setDeletingSetId(null);
 
     if (error) {
-      Alert.alert("Could not delete set", error.message);
+      Alert.alert("Set silinemedi", error.message);
       return;
     }
 
@@ -299,7 +333,7 @@ export default function SetsScreen() {
     const cleanWord = addWordSearch.trim();
 
     if (!cleanWord) {
-      Alert.alert("Missing word", "Type a word to add to this set.");
+      Alert.alert("Kelime eksik", "Bu sete eklemek için bir kelime yaz.");
       return;
     }
 
@@ -311,7 +345,7 @@ export default function SetsScreen() {
 
     if (addWordError) {
       setSavingSetItem(false);
-      Alert.alert("Could not add word", addWordError.message);
+      Alert.alert("Kelime eklenemedi", addWordError.message);
       return;
     }
 
@@ -320,8 +354,8 @@ export default function SetsScreen() {
     if (!targetWord) {
       setSavingSetItem(false);
       Alert.alert(
-        "Word added",
-        "The word was added to your Library, but I could not attach it to this set."
+        "Kelime eklendi",
+        "Kelime Library'ye eklendi ama bu sete bağlanamadı."
       );
       await loadSetsData();
       return;
@@ -335,7 +369,7 @@ export default function SetsScreen() {
     setSavingSetItem(false);
 
     if (setError && setError.code !== "23505") {
-      Alert.alert("Word added, but could not add it to set", setError.message);
+      Alert.alert("Kelime eklendi ama sete bağlanamadı", setError.message);
       return;
     }
 
@@ -356,7 +390,7 @@ export default function SetsScreen() {
     setSavingSetItem(false);
 
     if (error && error.code !== "23505") {
-      Alert.alert("Could not add word", error.message);
+      Alert.alert("Kelime eklenemedi", error.message);
       return;
     }
 
@@ -368,12 +402,12 @@ export default function SetsScreen() {
     if (!expandedSet) return;
 
     Alert.alert(
-      "Remove from set?",
-      `Remove "${getDisplayWord(word)}" from "${expandedSet.name}"? The word will stay in Library.`,
+      "Setten çıkarılsın mı?",
+      `"${getDisplayWord(word)}", "${expandedSet.name}" setinden çıkarılacak. Kelime Library içinde kalır.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Vazgeç", style: "cancel" },
         {
-          text: "Remove",
+          text: "Çıkar",
           style: "destructive",
           onPress: () => removeWordFromSet(word.id),
         },
@@ -395,7 +429,7 @@ export default function SetsScreen() {
     setSavingSetItem(false);
 
     if (error) {
-      Alert.alert("Could not remove word", error.message);
+      Alert.alert("Kelime çıkarılamadı", error.message);
       return;
     }
 
@@ -418,7 +452,7 @@ export default function SetsScreen() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      Alert.alert("Could not find word", error.message);
+      Alert.alert("Kelime bulunamadı", error.message);
       return null;
     }
 
@@ -450,19 +484,21 @@ export default function SetsScreen() {
     const scopedWords = getWordsForSet(setId);
     const readyWords = scopedWords.filter(hasAiContent);
     const reviewTodayWords = readyWords.filter(isDue);
+    const learnedWords = scopedWords.filter(isLearnedWord);
 
     return {
       total: scopedWords.length,
       ready: readyWords.length,
       reviewToday: reviewTodayWords.length,
+      learned: learnedWords.length,
     };
   }
 
   if (initialLoading) {
     return (
       <View style={styles.centeredContainer}>
-        <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading sets...</Text>
+        <ActivityIndicator color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Setlerin yükleniyor...</Text>
       </View>
     );
   }
@@ -470,307 +506,318 @@ export default function SetsScreen() {
   if (!session) {
     return (
       <View style={styles.centeredContainer}>
-        <Text style={styles.emptyTitle}>Log in first</Text>
+        <Text style={styles.emptyTitle}>Önce giriş yap</Text>
         <Text style={styles.emptyText}>
-          Your study sets will appear here after you log in.
+          Çalışma setlerin giriş yaptıktan sonra burada görünecek.
         </Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Sets</Text>
-        <Text style={styles.title}>Manage study sets</Text>
-        <Text style={styles.subtitle}>
-          Create focused groups, add words from Library, and keep each set clean.
-          Start quizzes from Today.
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Create a set</Text>
-        <Text style={styles.helperText}>
-          Use sets for goals like TOEFL, Daily English, My Mistakes, or Still
-          Learning.
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Example: TOEFL, Daily English..."
-          value={newSetName}
-          onChangeText={setNewSetName}
-          editable={!creatingSet}
-          onSubmitEditing={handleCreateSet}
-        />
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Setlerim</Text>
 
         <Pressable
-          style={[styles.button, creatingSet && styles.disabledButton]}
-          onPress={handleCreateSet}
-          disabled={creatingSet}
+          style={styles.addButton}
+          onPress={() => setShowCreateBox((current) => !current)}
         >
-          <Text style={styles.buttonText}>
-            {creatingSet ? "Creating..." : "Create set"}
-          </Text>
+          <Text style={styles.addButtonText}>＋</Text>
         </Pressable>
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Your sets</Text>
+      <View style={styles.searchBox}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Set ara..."
+          placeholderTextColor={theme.colors.textMuted}
+          value={setSearchText}
+          onChangeText={setSetSearchText}
+        />
+      </View>
 
-          <Pressable onPress={loadSetsData} disabled={setsLoading}>
-            <Text style={styles.refreshText}>
-              {setsLoading ? "Loading..." : "Refresh"}
+      <View style={styles.filterRow}>
+        {SET_FILTERS.map((filter) => {
+          const isActive = selectedFilter === filter.key;
+
+          return (
+            <Pressable
+              key={filter.key}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              onPress={() => setSelectedFilter(filter.key)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  isActive && styles.filterChipTextActive,
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {showCreateBox ? (
+        <View style={styles.createPanel}>
+          <Text style={styles.createTitle}>Yeni set oluştur</Text>
+          <Text style={styles.createText}>
+            TOEFL, Akademik İngilizce veya Günlük Konuşmalar gibi odaklı setler oluştur.
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Örn: TOEFL kelimeleri"
+            placeholderTextColor={theme.colors.textMuted}
+            value={newSetName}
+            onChangeText={setNewSetName}
+            editable={!creatingSet}
+            onSubmitEditing={handleCreateSet}
+          />
+
+          <Pressable
+            style={[styles.primaryButton, creatingSet && styles.disabledButton]}
+            onPress={handleCreateSet}
+            disabled={creatingSet}
+          >
+            <Text style={styles.primaryButtonText}>
+              {creatingSet ? "Oluşturuluyor..." : "Set oluştur"}
             </Text>
           </Pressable>
         </View>
+      ) : null}
 
-        {setsLoading && sets.length === 0 ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator />
-            <Text style={styles.emptyStateText}>Loading your sets...</Text>
-          </View>
-        ) : sets.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>No sets yet</Text>
-            <Text style={styles.emptyStateText}>
-              Create your first set, then add words from Library.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.setList}>
-            {sets.map((set) => {
-              const stats = getSetStats(set.id);
-              const isEditing = editingSetId === set.id;
-              const isExpanded = expandedSetId === set.id;
-              const savingThisSet = savingRenameId === set.id;
-              const deletingThisSet = deletingSetId === set.id;
+      {setsLoading && sets.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <ActivityIndicator color={theme.colors.primary} />
+          <Text style={styles.emptyStateText}>Setlerin yükleniyor...</Text>
+        </View>
+      ) : filteredSets.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyStateTitle}>
+            {sets.length === 0 ? "Henüz set yok" : "Sonuç bulunamadı"}
+          </Text>
+          <Text style={styles.emptyStateText}>
+            {sets.length === 0
+              ? "Sağ üstteki + butonuyla ilk setini oluştur."
+              : "Farklı bir arama veya filtre deneyebilirsin."}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.setList}>
+          {filteredSets.map((set, index) => {
+            const stats = getSetStats(set.id);
+            const isEditing = editingSetId === set.id;
+            const isExpanded = expandedSetId === set.id;
+            const savingThisSet = savingRenameId === set.id;
+            const deletingThisSet = deletingSetId === set.id;
+            const progress = getSetProgress(stats.total, stats.learned);
+            const progressWidth = `${progress}%` as `${number}%`;
+            const isCompleted = stats.total > 0 && stats.learned === stats.total;
+            const accent = getSetAccent(index);
 
-              return (
-                <View key={set.id} style={styles.setCard}>
-                  <Pressable
-                    style={styles.setCardHeader}
-                    onPress={() => toggleSetDetails(set)}
-                  >
-                    <View style={styles.setTitleWrap}>
-                      <Text style={styles.setTitle}>{set.name}</Text>
-                      <Text style={styles.setMeta}>
-                        {stats.total} words • {stats.ready} ready •{" "}
-                        {stats.reviewToday} review today
+            return (
+              <View key={set.id} style={styles.setCard}>
+                <Pressable
+                  style={styles.setCardHeader}
+                  onPress={() => toggleSetDetails(set)}
+                >
+                  <View style={[styles.setIcon, accent.iconStyle]}>
+                    <Text style={styles.setIconText}>{getSetIcon(set.name, index)}</Text>
+                  </View>
+
+                  <View style={styles.setMain}>
+                    <View style={styles.setTitleRow}>
+                      <Text style={styles.setTitle} numberOfLines={2}>
+                        {set.name}
                       </Text>
+
+                      {isCompleted ? (
+                        <View style={styles.completedBadge}>
+                          <Text style={styles.completedBadgeText}>Tamamlandı</Text>
+                        </View>
+                      ) : null}
                     </View>
 
-                    <View style={styles.iconActions}>
+                    <Text style={styles.setMeta}>{stats.total} kelime</Text>
+
+                    <View style={styles.progressRow}>
+                      <View style={styles.progressTrack}>
+                        <View
+                          style={[
+                            styles.progressFill,
+                            accent.progressStyle,
+                            { width: progressWidth },
+                          ]}
+                        />
+                      </View>
+
+                      <Text style={styles.progressText}>{progress}%</Text>
+                    </View>
+                  </View>
+                </Pressable>
+
+                {isExpanded ? (
+                  <View style={styles.expandedBox}>
+                    <View style={styles.actionRow}>
                       <Pressable
-                        style={styles.iconButton}
+                        style={styles.secondaryButton}
                         onPress={() => startEditingSet(set)}
                       >
-                        <Text style={styles.iconButtonText}>✎</Text>
+                        <Text style={styles.secondaryButtonText}>Adı düzenle</Text>
                       </Pressable>
 
                       <Pressable
-                        style={[styles.iconButton, styles.deleteIconButton]}
+                        style={[styles.dangerButton, deletingThisSet && styles.disabledButton]}
                         onPress={() => confirmDeleteSet(set)}
                         disabled={deletingThisSet}
                       >
-                        <Text
-                          style={[
-                            styles.iconButtonText,
-                            styles.deleteIconButtonText,
-                          ]}
-                        >
-                          ×
+                        <Text style={styles.dangerButtonText}>
+                          {deletingThisSet ? "Siliniyor..." : "Sil"}
                         </Text>
                       </Pressable>
                     </View>
-                  </Pressable>
 
-                  <View style={styles.statsRow}>
-                    <View style={styles.statPill}>
-                      <Text style={styles.statNumber}>{stats.total}</Text>
-                      <Text style={styles.statLabel}>words</Text>
-                    </View>
-
-                    <View style={styles.statPill}>
-                      <Text style={styles.statNumber}>{stats.ready}</Text>
-                      <Text style={styles.statLabel}>ready</Text>
-                    </View>
-
-                    <View style={styles.statPill}>
-                      <Text style={styles.statNumber}>{stats.reviewToday}</Text>
-                      <Text style={styles.statLabel}>today</Text>
-                    </View>
-                  </View>
-
-                  <Pressable
-                    style={styles.detailsToggle}
-                    onPress={() => toggleSetDetails(set)}
-                  >
-                    <Text style={styles.detailsToggleText}>
-                      {isExpanded ? "Hide set contents" : "View and edit words"}
-                    </Text>
-                  </Pressable>
-
-                  {isEditing ? (
-                    <View style={styles.editBox}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Set name"
-                        value={editingSetName}
-                        onChangeText={setEditingSetName}
-                        editable={!savingThisSet && !deletingThisSet}
-                        onSubmitEditing={() => saveSetName(set)}
-                      />
-
-                      <View style={styles.actionRow}>
-                        <Pressable
-                          style={[
-                            styles.smallButton,
-                            (savingThisSet || deletingThisSet) &&
-                              styles.disabledButton,
-                          ]}
-                          onPress={() => saveSetName(set)}
-                          disabled={savingThisSet || deletingThisSet}
-                        >
-                          <Text style={styles.smallButtonText}>
-                            {savingThisSet ? "Saving..." : "Save name"}
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          style={[
-                            styles.smallSecondaryButton,
-                            (savingThisSet || deletingThisSet) &&
-                              styles.disabledButton,
-                          ]}
-                          onPress={cancelEditingSet}
-                          disabled={savingThisSet || deletingThisSet}
-                        >
-                          <Text style={styles.smallSecondaryButtonText}>
-                            Cancel
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : null}
-
-                  {isExpanded ? (
-                    <View style={styles.contentsBox}>
-                      <Text style={styles.contentsTitle}>Set contents</Text>
-
-                      {expandedSetWords.length === 0 ? (
-                        <View style={styles.emptyMiniState}>
-                          <Text style={styles.emptyMiniTitle}>
-                            This set is empty
-                          </Text>
-                          <Text style={styles.emptyMiniText}>
-                            Add words from your Library below.
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.wordList}>
-                          {expandedSetWords.map((word) => {
-                            const aiReady = hasAiContent(word);
-
-                            return (
-                              <View key={word.id} style={styles.wordRow}>
-                                <Pressable
-                                  style={styles.wordInfo}
-                                  onPress={() => openWordDetail(word)}
-                                >
-                                  <Text style={styles.wordText}>
-                                    {getDisplayWord(word)}
-                                  </Text>
-                                  <Text style={styles.wordMeta}>
-                                    {word.status ?? "new"} •{" "}
-                                    {aiReady ? "Practice ready" : "Needs AI"}
-                                  </Text>
-                                </Pressable>
-
-                                <Pressable
-                                  style={[
-                                    styles.removeWordButton,
-                                    savingSetItem && styles.disabledButton,
-                                  ]}
-                                  onPress={() => confirmRemoveWordFromSet(word)}
-                                  disabled={savingSetItem}
-                                >
-                                  <Text style={styles.removeWordButtonText}>
-                                    Remove
-                                  </Text>
-                                </Pressable>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-
-                      <View style={styles.addWordsBox}>
-                        <Text style={styles.contentsTitle}>Add word to this set</Text>
-                        <Text style={styles.emptyMiniText}>
-                          Type any word. It will be saved to Library and added to
-                          this set automatically.
-                        </Text>
-
+                    {isEditing ? (
+                      <View style={styles.editBox}>
                         <TextInput
                           style={styles.input}
-                          placeholder="Example: usually"
-                          autoCapitalize="none"
-                          value={addWordSearch}
-                          onChangeText={setAddWordSearch}
-                          editable={!savingSetItem}
-                          onSubmitEditing={handleAddWordToExpandedSet}
+                          placeholder="Set adı"
+                          placeholderTextColor={theme.colors.textMuted}
+                          value={editingSetName}
+                          onChangeText={setEditingSetName}
+                          editable={!savingThisSet && !deletingThisSet}
+                          onSubmitEditing={() => saveSetName(set)}
                         />
 
-                        <Pressable
-                          style={[
-                            styles.button,
-                            savingSetItem && styles.disabledButton,
-                          ]}
-                          onPress={handleAddWordToExpandedSet}
-                          disabled={savingSetItem}
-                        >
-                          <Text style={styles.buttonText}>
-                            {savingSetItem ? "Adding..." : "Add to set"}
-                          </Text>
-                        </Pressable>
-
-                        {addableWords.length > 0 ? (
-                          <View style={styles.addableSuggestionBlock}>
-                            <Text style={styles.suggestionLabel}>
-                              Existing Library matches
+                        <View style={styles.actionRow}>
+                          <Pressable
+                            style={[
+                              styles.primaryButton,
+                              (savingThisSet || deletingThisSet) && styles.disabledButton,
+                            ]}
+                            onPress={() => saveSetName(set)}
+                            disabled={savingThisSet || deletingThisSet}
+                          >
+                            <Text style={styles.primaryButtonText}>
+                              {savingThisSet ? "Kaydediliyor..." : "Kaydet"}
                             </Text>
+                          </Pressable>
 
-                            <View style={styles.addableList}>
-                              {addableWords.map((word) => (
-                                <Pressable
-                                  key={word.id}
-                                  style={[
-                                    styles.addableWordRow,
-                                    savingSetItem && styles.disabledButton,
-                                  ]}
-                                  onPress={() => addExistingWordToSet(word.id)}
-                                  disabled={savingSetItem}
-                                >
-                                  <Text style={styles.addableWordText}>
-                                    + {getDisplayWord(word)}
-                                  </Text>
-                                </Pressable>
-                              ))}
-                            </View>
-                          </View>
-                        ) : null}
+                          <Pressable
+                            style={styles.secondaryButton}
+                            onPress={cancelEditingSet}
+                            disabled={savingThisSet || deletingThisSet}
+                          >
+                            <Text style={styles.secondaryButtonText}>Vazgeç</Text>
+                          </Pressable>
+                        </View>
                       </View>
+                    ) : null}
+
+                    <Text style={styles.contentsTitle}>Set içeriği</Text>
+
+                    {expandedSetWords.length === 0 ? (
+                      <View style={styles.emptyMiniState}>
+                        <Text style={styles.emptyMiniTitle}>Bu set boş</Text>
+                        <Text style={styles.emptyMiniText}>
+                          Aşağıdan kelime ekleyebilirsin.
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.wordList}>
+                        {expandedSetWords.map((word) => (
+                          <View key={word.id} style={styles.wordRow}>
+                            <Pressable
+                              style={styles.wordInfo}
+                              onPress={() => openWordDetail(word)}
+                            >
+                              <Text style={styles.wordText}>{getDisplayWord(word)}</Text>
+                              <Text style={styles.wordMeta}>
+                                {word.status ?? "yeni"} •{" "}
+                                {hasAiContent(word) ? "AI hazır" : "AI bekliyor"}
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={[
+                                styles.removeWordButton,
+                                savingSetItem && styles.disabledButton,
+                              ]}
+                              onPress={() => confirmRemoveWordFromSet(word)}
+                              disabled={savingSetItem}
+                            >
+                              <Text style={styles.removeWordButtonText}>Çıkar</Text>
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    <View style={styles.addWordsBox}>
+                      <Text style={styles.contentsTitle}>Bu sete kelime ekle</Text>
+
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Örn: usually"
+                        placeholderTextColor={theme.colors.textMuted}
+                        autoCapitalize="none"
+                        value={addWordSearch}
+                        onChangeText={setAddWordSearch}
+                        editable={!savingSetItem}
+                        onSubmitEditing={handleAddWordToExpandedSet}
+                      />
+
+                      <Pressable
+                        style={[styles.primaryButton, savingSetItem && styles.disabledButton]}
+                        onPress={handleAddWordToExpandedSet}
+                        disabled={savingSetItem}
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {savingSetItem ? "Ekleniyor..." : "Sete ekle"}
+                        </Text>
+                      </Pressable>
+
+                      {addableWords.length > 0 ? (
+                        <View style={styles.addableSuggestionBlock}>
+                          <Text style={styles.suggestionLabel}>
+                            Library eşleşmeleri
+                          </Text>
+
+                          <View style={styles.addableList}>
+                            {addableWords.map((word) => (
+                              <Pressable
+                                key={word.id}
+                                style={[
+                                  styles.addableWordRow,
+                                  savingSetItem && styles.disabledButton,
+                                ]}
+                                onPress={() => addExistingWordToSet(word.id)}
+                                disabled={savingSetItem}
+                              >
+                                <Text style={styles.addableWordText}>
+                                  + {getDisplayWord(word)}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      ) : null}
                     </View>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </View>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -784,7 +831,7 @@ function getContent(item: UserWord) {
 function getDisplayWord(item: UserWord) {
   const content = getContent(item);
 
-  return content?.display_word ?? content?.normalized_word ?? "Untitled word";
+  return content?.display_word ?? content?.normalized_word ?? "İsimsiz kelime";
 }
 
 function hasAiContent(item: UserWord) {
@@ -803,262 +850,364 @@ function isDue(item: UserWord) {
   return new Date(item.next_review_at) <= new Date();
 }
 
+function isLearnedWord(item: UserWord) {
+  const status = (item.status ?? "").toLowerCase();
+
+  return (
+    status.includes("learned") ||
+    status.includes("known") ||
+    status.includes("mastered") ||
+    status.includes("completed") ||
+    status.includes("öğren") ||
+    status.includes("ogren")
+  );
+}
+
+function getSetProgress(total: number, learned: number) {
+  if (total <= 0) return 0;
+
+  return Math.round((learned / total) * 100);
+}
+
+function getSetIcon(name: string, index: number) {
+  const cleanName = name.toLowerCase();
+
+  if (cleanName.includes("konuş") || cleanName.includes("daily")) return "💬";
+  if (cleanName.includes("akadem") || cleanName.includes("toefl")) return "🎓";
+  if (cleanName.includes("seyahat") || cleanName.includes("travel")) return "✈️";
+  if (cleanName.includes("mistake") || cleanName.includes("hata")) return "✍️";
+
+  return ["📚", "🧠", "✨"][index % 3];
+}
+
+function getSetAccent(index: number) {
+  const accents = [
+    {
+      iconStyle: styles.iconWarm,
+      progressStyle: styles.progressWarm,
+    },
+    {
+      iconStyle: styles.iconSoft,
+      progressStyle: styles.progressWarm,
+    },
+    {
+      iconStyle: styles.iconGreen,
+      progressStyle: styles.progressGreen,
+    },
+  ];
+
+  return accents[index % accents.length];
+}
+
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 72,
+    paddingHorizontal: 30,
+    paddingTop: 42,
     paddingBottom: 110,
-    backgroundColor: "#f8fafc",
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#f8fafc",
+    padding: theme.spacing["2xl"],
+    backgroundColor: theme.colors.background,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: theme.spacing.md,
     fontSize: 16,
-    color: "#475569",
+    color: theme.colors.textMuted,
   },
-  hero: {
-    marginBottom: 20,
-  },
-  eyebrow: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#2563eb",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 17,
-    lineHeight: 25,
-    color: "#64748b",
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  sectionHeader: {
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 14,
+    marginBottom: 20,
   },
-  sectionTitle: {
-    fontSize: 22,
+  title: {
+    fontSize: 24,
     fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
+    color: theme.colors.text,
+    letterSpacing: -0.5,
   },
-  helperText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#64748b",
-    marginBottom: 14,
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.primary,
   },
-  refreshText: {
+  addButtonText: {
+    color: theme.colors.textInverse,
+    fontSize: 25,
+    fontWeight: "800",
+    lineHeight: 28,
+  },
+  searchBox: {
+    height: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 13,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  searchIcon: {
+    marginRight: 8,
+    fontSize: 18,
+    fontWeight: "900",
+    color: theme.colors.textMuted,
+  },
+  searchInput: {
+    flex: 1,
+    height: "100%",
+    padding: 0,
     fontSize: 14,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
+  filterRow: {
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterChip: {
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingHorizontal: 14,
+  },
+  filterChipActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
     fontWeight: "900",
-    color: "#2563eb",
+    color: theme.colors.textMuted,
+  },
+  filterChipTextActive: {
+    color: theme.colors.textInverse,
+  },
+  createPanel: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    marginBottom: 14,
+    ...theme.shadow.card,
+  },
+  createTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: theme.colors.text,
+    marginBottom: 5,
+  },
+  createText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    color: theme.colors.textMuted,
+    marginBottom: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 16,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surfaceMuted,
     marginBottom: 12,
   },
-  button: {
-    backgroundColor: "#2563eb",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 16,
+  primaryButton: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     alignItems: "center",
   },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
+  primaryButtonText: {
+    color: theme.colors.textInverse,
+    fontSize: 14,
     fontWeight: "900",
   },
   disabledButton: {
     opacity: 0.55,
   },
   setList: {
-    gap: 12,
+    gap: 11,
   },
   setCard: {
-    backgroundColor: "#f8fafc",
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 22,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
     padding: 16,
+    ...theme.shadow.card,
   },
   setCardHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 12,
+    alignItems: "center",
+    gap: 14,
   },
-  setTitleWrap: {
-    flex: 1,
-  },
-  setTitle: {
-    fontSize: 21,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 5,
-  },
-  setMeta: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: "700",
-    color: "#64748b",
-  },
-  iconActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  setIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#e0f2fe",
   },
-  iconButtonText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#0369a1",
+  setIconText: {
+    fontSize: 23,
   },
-  deleteIconButton: {
-    backgroundColor: "#fee2e2",
+  iconWarm: {
+    backgroundColor: theme.colors.surfaceSoft,
   },
-  deleteIconButtonText: {
-    color: "#991b1b",
-    fontSize: 22,
+  iconSoft: {
+    backgroundColor: theme.colors.primarySurface,
   },
-  statsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
+  iconGreen: {
+    backgroundColor: theme.colors.successSoft,
   },
-  statPill: {
+  setMain: {
     flex: 1,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 12,
+    minWidth: 0,
   },
-  statNumber: {
-    fontSize: 22,
+  setTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 3,
+  },
+  setTitle: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
   },
-  statLabel: {
-    marginTop: 2,
-    fontSize: 11,
+  setMeta: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: theme.colors.textMuted,
+    marginBottom: 10,
+  },
+  completedBadge: {
+    borderRadius: 7,
+    backgroundColor: theme.colors.successSoft,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  completedBadgeText: {
+    fontSize: 10,
     fontWeight: "900",
-    color: "#64748b",
-    textTransform: "uppercase",
+    color: theme.colors.successDark,
   },
-  detailsToggle: {
-    backgroundColor: "#e0f2fe",
-    borderRadius: 14,
-    paddingVertical: 12,
+  progressRow: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
-  detailsToggleText: {
-    color: "#0369a1",
-    fontSize: 14,
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceSoft,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: theme.radius.pill,
+  },
+  progressWarm: {
+    backgroundColor: theme.colors.primary,
+  },
+  progressGreen: {
+    backgroundColor: theme.colors.success,
+  },
+  progressText: {
+    width: 33,
+    fontSize: 12,
     fontWeight: "900",
+    color: theme.colors.textMuted,
+    textAlign: "right",
   },
-  editBox: {
-    marginTop: 12,
-    paddingTop: 12,
+  expandedBox: {
+    marginTop: 14,
+    paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: theme.colors.border,
   },
   actionRow: {
     flexDirection: "row",
     gap: 10,
+    marginBottom: 12,
   },
-  smallButton: {
+  secondaryButton: {
     flex: 1,
-    backgroundColor: "#2563eb",
+    backgroundColor: theme.colors.surfaceSoft,
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
   },
-  smallButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
+  secondaryButtonText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
     fontWeight: "900",
   },
-  smallSecondaryButton: {
+  dangerButton: {
     flex: 1,
-    backgroundColor: "#e0f2fe",
+    backgroundColor: theme.colors.dangerSoft,
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
   },
-  smallSecondaryButtonText: {
-    color: "#0369a1",
-    fontSize: 14,
+  dangerButtonText: {
+    color: theme.colors.dangerDark,
+    fontSize: 13,
     fontWeight: "900",
   },
-  contentsBox: {
-    marginTop: 12,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+  editBox: {
+    marginBottom: 12,
   },
   contentsTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 10,
   },
   emptyMiniState: {
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
     marginBottom: 12,
   },
   emptyMiniTitle: {
     fontSize: 15,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 4,
   },
   emptyMiniText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#64748b",
-    marginBottom: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    color: theme.colors.textMuted,
   },
   wordList: {
     gap: 8,
@@ -1068,36 +1217,36 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
     padding: 12,
   },
   wordInfo: {
     flex: 1,
   },
   wordText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 3,
   },
   wordMeta: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#64748b",
+    color: theme.colors.textMuted,
   },
   removeWordButton: {
-    backgroundColor: "#fef2f2",
-    borderRadius: 999,
+    backgroundColor: theme.colors.dangerSoft,
+    borderRadius: theme.radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   removeWordButtonText: {
     fontSize: 12,
     fontWeight: "900",
-    color: "#991b1b",
+    color: theme.colors.dangerDark,
   },
   addWordsBox: {
     marginTop: 4,
@@ -1106,9 +1255,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   suggestionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
-    color: "#64748b",
+    color: theme.colors.textMuted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -1117,44 +1266,54 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addableWordRow: {
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
     padding: 12,
   },
   addableWordText: {
     fontSize: 15,
     fontWeight: "900",
-    color: "#0369a1",
+    color: theme.colors.primary,
   },
-  emptyState: {
+  emptyCard: {
     alignItems: "center",
-    paddingVertical: 28,
+    justifyContent: "center",
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing["3xl"],
+    ...theme.shadow.card,
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 6,
+    textAlign: "center",
   },
   emptyStateText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#64748b",
+    marginTop: theme.spacing.sm,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    color: theme.colors.textMuted,
     textAlign: "center",
   },
   emptyTitle: {
     fontSize: 26,
     fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
     textAlign: "center",
   },
   emptyText: {
     fontSize: 16,
     lineHeight: 24,
-    color: "#475569",
+    color: theme.colors.textMuted,
     textAlign: "center",
   },
 });
