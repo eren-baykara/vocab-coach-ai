@@ -13,6 +13,7 @@ import { router, useFocusEffect } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
+import { theme } from "../../theme";
 
 type WordContent = {
   display_word: string | null;
@@ -30,6 +31,9 @@ type UserWord = {
   word_contents: WordContent | WordContent[] | null;
 };
 
+type LearningFilter = "all" | "learned" | "studying" | "new";
+type LearningState = Exclude<LearningFilter, "all">;
+
 const LIBRARY_SELECT = `
   id,
   status,
@@ -44,12 +48,20 @@ const LIBRARY_SELECT = `
   )
 `;
 
+const FILTERS: { key: LearningFilter; label: string }[] = [
+  { key: "all", label: "Hepsi" },
+  { key: "learned", label: "Öğrenildi" },
+  { key: "studying", label: "Çalışıyor" },
+  { key: "new", label: "Yeni" },
+];
+
 export default function LibraryScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [wordsLoading, setWordsLoading] = useState(false);
   const [words, setWords] = useState<UserWord[]>([]);
   const [searchText, setSearchText] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState<LearningFilter>("all");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -81,7 +93,7 @@ export default function LibraryScreen() {
     setWordsLoading(false);
 
     if (error) {
-      Alert.alert("Could not load Library", error.message);
+      Alert.alert("Kelimeler yüklenemedi", error.message);
       return;
     }
 
@@ -107,8 +119,6 @@ export default function LibraryScreen() {
   const filteredWords = useMemo(() => {
     const cleanSearch = searchText.trim().toLowerCase();
 
-    if (!cleanSearch) return words;
-
     return words.filter((item) => {
       const content = getContent(item);
       const displayWord = content?.display_word?.toLowerCase() ?? "";
@@ -116,17 +126,21 @@ export default function LibraryScreen() {
       const meaning = content?.turkish_meaning?.toLowerCase() ?? "";
       const definition = content?.simple_definition?.toLowerCase() ?? "";
 
-      return (
+      const matchesSearch =
+        !cleanSearch ||
         displayWord.includes(cleanSearch) ||
         normalizedWord.includes(cleanSearch) ||
         meaning.includes(cleanSearch) ||
-        definition.includes(cleanSearch)
-      );
-    });
-  }, [words, searchText]);
+        definition.includes(cleanSearch);
 
-  const readyCount = words.filter(hasAiContent).length;
-  const needsAiCount = words.length - readyCount;
+      const matchesFilter =
+        selectedFilter === "all" || getLearningState(item) === selectedFilter;
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [words, searchText, selectedFilter]);
+
+  const totalLabel = `${words.length.toLocaleString("tr-TR")} kelime`;
 
   function openWordDetail(item: UserWord) {
     router.push({
@@ -138,8 +152,8 @@ export default function LibraryScreen() {
   if (initialLoading) {
     return (
       <View style={styles.centeredContainer}>
-        <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading Library...</Text>
+        <ActivityIndicator color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Kelimelerin yükleniyor...</Text>
       </View>
     );
   }
@@ -147,125 +161,132 @@ export default function LibraryScreen() {
   if (!session) {
     return (
       <View style={styles.centeredContainer}>
-        <Text style={styles.emptyTitle}>Log in first</Text>
+        <Text style={styles.emptyTitle}>Önce giriş yap</Text>
         <Text style={styles.emptyText}>
-          Your saved words will appear here after you log in.
+          Kaydettiğin kelimeler giriş yaptıktan sonra burada görünecek.
         </Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Library</Text>
-        <Text style={styles.title}>Your word archive</Text>
-        <Text style={styles.subtitle}>
-          All saved words live here. Open any word to view details, notes, sets,
-          and AI content.
-        </Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Kelimelerim</Text>
+
+        <Pressable
+          style={styles.countPill}
+          onPress={loadWords}
+          disabled={wordsLoading}
+        >
+          <Text style={styles.countText}>
+            {wordsLoading ? "Yükleniyor" : totalLabel}
+          </Text>
+        </Pressable>
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{words.length}</Text>
-          <Text style={styles.statLabel}>total words</Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{readyCount}</Text>
-          <Text style={styles.statLabel}>ready</Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{needsAiCount}</Text>
-          <Text style={styles.statLabel}>needs AI</Text>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Words</Text>
-
-          <Pressable onPress={loadWords} disabled={wordsLoading}>
-            <Text style={styles.refreshText}>
-              {wordsLoading ? "Loading..." : "Refresh"}
-            </Text>
-          </Pressable>
-        </View>
-
+      <View style={styles.searchBox}>
+        <Text style={styles.searchIcon}>⌕</Text>
         <TextInput
           style={styles.input}
-          placeholder="Search words or meanings..."
+          placeholder="Kelime veya anlam ara..."
+          placeholderTextColor={theme.colors.textMuted}
           autoCapitalize="none"
           value={searchText}
           onChangeText={setSearchText}
         />
-
-        {wordsLoading && words.length === 0 ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator />
-            <Text style={styles.emptyStateText}>Loading your words...</Text>
-          </View>
-        ) : filteredWords.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>
-              {words.length === 0 ? "No words yet" : "No matches"}
-            </Text>
-            <Text style={styles.emptyStateText}>
-              {words.length === 0
-                ? "Add words from Today, then they will appear here."
-                : "Try a different search."}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.wordList}>
-            {filteredWords.map((item) => {
-              const aiReady = hasAiContent(item);
-
-              return (
-                <Pressable
-                  key={item.id}
-                  style={styles.wordItem}
-                  onPress={() => openWordDetail(item)}
-                >
-                  <View style={styles.wordMainContent}>
-                    <Text style={styles.wordText}>{getDisplayWord(item)}</Text>
-
-                    <View style={styles.badgeRow}>
-                      <View style={styles.statusBadge}>
-                        <Text style={styles.statusBadgeText}>
-                          {item.status ?? "new"}
-                        </Text>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.aiBadge,
-                          aiReady ? styles.aiReadyBadge : styles.aiMissingBadge,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.aiBadgeText,
-                            aiReady
-                              ? styles.aiReadyBadgeText
-                              : styles.aiMissingBadgeText,
-                          ]}
-                        >
-                          {aiReady ? "Practice ready" : "Needs AI"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Text style={styles.chevron}>›</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
       </View>
+
+      <View style={styles.filterRow}>
+  {FILTERS.map((filter) => {
+    const isActive = selectedFilter === filter.key;
+
+    return (
+      <Pressable
+        key={filter.key}
+        style={[styles.filterChip, isActive && styles.filterChipActive]}
+        onPress={() => setSelectedFilter(filter.key)}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            isActive && styles.filterChipTextActive,
+          ]}
+          numberOfLines={1}
+        >
+          {filter.label}
+        </Text>
+      </Pressable>
+    );
+  })}
+</View>
+
+      {wordsLoading && words.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <ActivityIndicator color={theme.colors.primary} />
+          <Text style={styles.emptyStateText}>Kelimelerin yükleniyor...</Text>
+        </View>
+      ) : filteredWords.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyStateTitle}>
+            {words.length === 0 ? "Henüz kelime yok" : "Sonuç bulunamadı"}
+          </Text>
+          <Text style={styles.emptyStateText}>
+            {words.length === 0
+              ? "Bugün ekranından kelime eklediğinde burada görünecek."
+              : "Farklı bir kelime, anlam veya filtre deneyebilirsin."}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.wordList}>
+          {filteredWords.map((item) => {
+            const learningState = getLearningState(item);
+            const statusMeta = getStatusMeta(learningState);
+            const primaryMeaning = getPrimaryMeaning(item);
+            const secondaryText = getSecondaryText(item);
+
+            return (
+              <Pressable
+                key={item.id}
+                style={styles.wordCard}
+                onPress={() => openWordDetail(item)}
+              >
+                <View style={[styles.partBadge, statusMeta.partStyle]}>
+                  <Text style={[styles.partBadgeText, statusMeta.partTextStyle]}>
+                    KLM
+                  </Text>
+                </View>
+
+                <View style={styles.wordMainContent}>
+                  <Text style={styles.wordText} numberOfLines={1}>
+                    {getDisplayWord(item)}
+                  </Text>
+
+                  <Text style={styles.meaningText} numberOfLines={1}>
+                    {primaryMeaning || "Anlam bilgisi bekleniyor"}
+                  </Text>
+
+                  {secondaryText ? (
+                    <Text style={styles.definitionText} numberOfLines={1}>
+                      {secondaryText}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={[styles.statusBadge, statusMeta.badgeStyle]}>
+                  <Text style={[styles.statusBadgeText, statusMeta.textStyle]}>
+                    {statusMeta.label}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -279,212 +300,311 @@ function getContent(item: UserWord) {
 function getDisplayWord(item: UserWord) {
   const content = getContent(item);
 
-  return content?.display_word ?? content?.normalized_word ?? "Untitled word";
+  return content?.display_word ?? content?.normalized_word ?? "İsimsiz kelime";
 }
 
-function hasAiContent(item: UserWord) {
+function getPrimaryMeaning(item: UserWord) {
   const content = getContent(item);
 
-  return Boolean(
-    content?.turkish_meaning ||
-      content?.simple_definition ||
-      content?.mini_lesson
-  );
+  return content?.turkish_meaning ?? "";
+}
+
+function getSecondaryText(item: UserWord) {
+  const content = getContent(item);
+
+  return content?.simple_definition ?? content?.mini_lesson ?? "";
+}
+
+function getLearningState(item: UserWord): LearningState {
+  const status = (item.status ?? "").toLowerCase();
+
+  if (
+    status.includes("learned") ||
+    status.includes("known") ||
+    status.includes("mastered") ||
+    status.includes("completed") ||
+    status.includes("öğren") ||
+    status.includes("ogren")
+  ) {
+    return "learned";
+  }
+
+  if (
+    status.includes("learning") ||
+    status.includes("review") ||
+    status.includes("study") ||
+    status.includes("studying") ||
+    status.includes("active") ||
+    status.includes("progress") ||
+    status.includes("due") ||
+    status.includes("çalış") ||
+    status.includes("calis")
+  ) {
+    return "studying";
+  }
+
+  return "new";
+}
+
+function getStatusMeta(state: LearningState) {
+  switch (state) {
+    case "learned":
+      return {
+        label: "Öğrenildi",
+        badgeStyle: styles.statusLearned,
+        textStyle: styles.statusLearnedText,
+        partStyle: styles.partLearned,
+        partTextStyle: styles.partLearnedText,
+      };
+    case "studying":
+      return {
+        label: "Çalışıyor",
+        badgeStyle: styles.statusStudying,
+        textStyle: styles.statusStudyingText,
+        partStyle: styles.partStudying,
+        partTextStyle: styles.partStudyingText,
+      };
+    default:
+      return {
+        label: "Yeni",
+        badgeStyle: styles.statusNew,
+        textStyle: styles.statusNewText,
+        partStyle: styles.partNew,
+        partTextStyle: styles.partNewText,
+      };
+  }
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 72,
+    paddingHorizontal: 17,
+    paddingTop: 38,
     paddingBottom: 110,
-    backgroundColor: "#f8fafc",
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#f8fafc",
+    padding: theme.spacing["2xl"],
+    backgroundColor: theme.colors.background,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: theme.spacing.md,
     fontSize: 16,
-    color: "#475569",
+    color: theme.colors.textMuted,
   },
-  hero: {
-    marginBottom: 20,
-  },
-  eyebrow: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#2563eb",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 17,
-    lineHeight: 25,
-    color: "#64748b",
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 18,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  statNumber: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#0f172a",
-  },
-  statLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    fontWeight: "900",
-    color: "#64748b",
-    textTransform: "uppercase",
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  sectionHeader: {
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 14,
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
-  sectionTitle: {
-    fontSize: 22,
+  title: {
+    fontSize: 23,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
+    letterSpacing: -0.4,
   },
-  refreshText: {
-    fontSize: 14,
+  countPill: {
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  countText: {
+    fontSize: 12,
     fontWeight: "900",
-    color: "#2563eb",
+    color: theme.colors.textMuted,
+  },
+  searchBox: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingHorizontal: 13,
+    marginBottom: 10,
+  },
+  searchIcon: {
+    marginRight: 8,
+    fontSize: 18,
+    fontWeight: "900",
+    color: theme.colors.textMuted,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: "#f8fafc",
+    flex: 1,
+    height: "100%",
+    padding: 0,
+    fontSize: 13,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    height: 32,
     marginBottom: 14,
+  },
+  filterChip: {
+    width: 88,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceSoft,
+  },
+  filterChipActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: theme.colors.textMuted,
+  },
+  filterChipTextActive: {
+    color: theme.colors.textInverse,
   },
   wordList: {
     gap: 10,
   },
-  wordItem: {
+  wordCard: {
+    minHeight: 86,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 12,
-    backgroundColor: "#f8fafc",
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 18,
-    padding: 14,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    ...theme.shadow.card,
+  },
+  partBadge: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+  },
+  partBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  partLearned: {
+    backgroundColor: theme.colors.successSoft,
+  },
+  partLearnedText: {
+    color: theme.colors.successDark,
+  },
+  partStudying: {
+    backgroundColor: theme.colors.primarySurface,
+  },
+  partStudyingText: {
+    color: theme.colors.primary,
+  },
+  partNew: {
+    backgroundColor: theme.colors.accentSoft,
+  },
+  partNewText: {
+    color: theme.colors.accent,
   },
   wordMainContent: {
     flex: 1,
+    minWidth: 0,
   },
   wordText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
+    color: theme.colors.text,
+    marginBottom: 3,
+    letterSpacing: -0.2,
   },
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  meaningText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: theme.colors.textMuted,
+    lineHeight: 17,
+  },
+  definitionText: {
+    marginTop: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: theme.colors.textMuted,
+    lineHeight: 17,
   },
   statusBadge: {
-    backgroundColor: "#e0f2fe",
-    borderRadius: 999,
-    paddingHorizontal: 10,
+    alignSelf: "flex-start",
+    borderRadius: 7,
+    paddingHorizontal: 8,
     paddingVertical: 5,
   },
   statusBadgeText: {
-    color: "#0369a1",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
   },
-  aiBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+  statusLearned: {
+    backgroundColor: theme.colors.successSoft,
   },
-  aiReadyBadge: {
-    backgroundColor: "#dcfce7",
+  statusLearnedText: {
+    color: theme.colors.successDark,
   },
-  aiMissingBadge: {
-    backgroundColor: "#fef3c7",
+  statusStudying: {
+    backgroundColor: theme.colors.warningSoft,
   },
-  aiBadgeText: {
-    fontSize: 12,
-    fontWeight: "900",
+  statusStudyingText: {
+    color: theme.colors.warningDark,
   },
-  aiReadyBadgeText: {
-    color: "#166534",
+  statusNew: {
+    backgroundColor: theme.colors.accentSoft,
   },
-  aiMissingBadgeText: {
-    color: "#92400e",
+  statusNewText: {
+    color: theme.colors.accent,
   },
-  chevron: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#94a3b8",
-  },
-  emptyState: {
+  emptyCard: {
     alignItems: "center",
-    paddingVertical: 28,
+    justifyContent: "center",
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing["3xl"],
+    ...theme.shadow.card,
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 6,
+    textAlign: "center",
   },
   emptyStateText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#64748b",
+    marginTop: theme.spacing.sm,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    color: theme.colors.textMuted,
     textAlign: "center",
   },
   emptyTitle: {
     fontSize: 26,
     fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
     textAlign: "center",
   },
   emptyText: {
     fontSize: 16,
     lineHeight: 24,
-    color: "#475569",
+    color: theme.colors.textMuted,
     textAlign: "center",
   },
 });
