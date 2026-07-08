@@ -4,7 +4,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from "react-native";
@@ -66,10 +65,6 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        <View style={styles.proBadge}>
-          <Text style={styles.proBadgeText}>PRO</Text>
-        </View>
-
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>23</Text>
@@ -121,16 +116,9 @@ export default function ProfileScreen() {
             <Text style={styles.settingSubtitle}>Her gün saat 20:00</Text>
           </View>
 
-          <Switch
+          <ToggleSwitch
             value={dailyReminder}
             onValueChange={setDailyReminder}
-            trackColor={{
-              false: theme.colors.surfaceSoft,
-              true: theme.colors.primarySoft,
-            }}
-            thumbColor={
-              dailyReminder ? theme.colors.primary : theme.colors.textSubtle
-            }
           />
         </View>
 
@@ -142,16 +130,9 @@ export default function ProfileScreen() {
             <Text style={styles.settingSubtitle}>Doğru / yanlış sesleri</Text>
           </View>
 
-          <Switch
+          <ToggleSwitch
             value={soundEffects}
             onValueChange={setSoundEffects}
-            trackColor={{
-              false: theme.colors.surfaceSoft,
-              true: theme.colors.primarySoft,
-            }}
-            thumbColor={
-              soundEffects ? theme.colors.primary : theme.colors.textSubtle
-            }
           />
         </View>
       </View>
@@ -176,6 +157,24 @@ export default function ProfileScreen() {
         Kelimelik AI · Ezberleme. AI ile kullanmayı öğren.
       </Text>
     </ScrollView>
+  );
+}
+
+
+function ToggleSwitch({
+  value,
+  onValueChange,
+}: {
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.toggleTrack, value && styles.toggleTrackActive]}
+      onPress={() => onValueChange(!value)}
+    >
+      <View style={[styles.toggleThumb, value && styles.toggleThumbActive]} />
+    </Pressable>
   );
 }
 
@@ -229,20 +228,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     marginTop: 3,
-  },
-  proBadge: {
-    position: "absolute",
-    top: 22,
-    right: 20,
-    backgroundColor: "#FFE7D8",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  proBadgeText: {
-    color: theme.colors.primaryDark,
-    fontSize: 11,
-    fontWeight: "900",
   },
   statsRow: {
     flexDirection: "row",
@@ -355,6 +340,27 @@ const styles = StyleSheet.create({
     color: theme.colors.danger,
     fontSize: 16,
     fontWeight: "900",
+  },
+  toggleTrack: {
+    width: 52,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: theme.colors.surfaceSoft,
+    padding: 3,
+    justifyContent: "center",
+  },
+  toggleTrackActive: {
+    backgroundColor: theme.colors.primarySoft,
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.colors.textSubtle,
+  },
+  toggleThumbActive: {
+    backgroundColor: theme.colors.primary,
+    transform: [{ translateX: 22 }],
   },
   footerText: {
     color: theme.colors.textSubtle,

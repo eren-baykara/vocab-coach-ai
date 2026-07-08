@@ -1,38 +1,66 @@
 import { Tabs } from "expo-router";
-import { Text, View, type ColorValue } from "react-native";
+import { StyleSheet, View, type ColorValue } from "react-native";
 
 import { theme } from "../../theme";
 
+type TabIconName = "home" | "sets" | "words" | "profile";
+
 function TabIcon({
-  icon,
+  name,
   color,
   focused,
 }: {
-  icon: string;
+  name: TabIconName;
   color: ColorValue;
   focused: boolean;
 }) {
   return (
     <View
-      style={{
-        width: 34,
-        height: 30,
-        borderRadius: theme.radius.md,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: focused ? theme.colors.primarySurface : "transparent",
-      }}
+      style={[
+        styles.iconWrap,
+        focused && { backgroundColor: theme.colors.primarySurface },
+      ]}
     >
-      <Text
-        style={{
-          color,
-          fontSize: 18,
-          fontWeight: "900",
-          lineHeight: 22,
-        }}
-      >
-        {icon}
-      </Text>
+      {name === "home" ? <HomeIcon color={color} /> : null}
+      {name === "sets" ? <GridIcon color={color} /> : null}
+      {name === "words" ? <BookIcon color={color} /> : null}
+      {name === "profile" ? <ProfileIcon color={color} /> : null}
+    </View>
+  );
+}
+
+function HomeIcon({ color }: { color: ColorValue }) {
+  return (
+    <View style={styles.homeIcon}>
+      <View style={[styles.homeRoof, { borderBottomColor: color }]} />
+      <View style={[styles.homeBody, { borderColor: color }]} />
+    </View>
+  );
+}
+
+function GridIcon({ color }: { color: ColorValue }) {
+  return (
+    <View style={styles.gridIcon}>
+      {[0, 1, 2, 3].map((item) => (
+        <View key={item} style={[styles.gridCell, { borderColor: color }]} />
+      ))}
+    </View>
+  );
+}
+
+function BookIcon({ color }: { color: ColorValue }) {
+  return (
+    <View style={[styles.bookIcon, { borderColor: color }]}>
+      <View style={[styles.bookLine, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function ProfileIcon({ color }: { color: ColorValue }) {
+  return (
+    <View style={styles.profileIcon}>
+      <View style={[styles.profileHead, { borderColor: color }]} />
+      <View style={[styles.profileBody, { borderColor: color }]} />
     </View>
   );
 }
@@ -64,7 +92,7 @@ export default function TabLayout() {
         options={{
           title: "Bugün",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="⌂" color={color} focused={focused} />
+            <TabIcon name="home" color={color} focused={focused} />
           ),
         }}
       />
@@ -74,7 +102,7 @@ export default function TabLayout() {
         options={{
           title: "Setler",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="▦" color={color} focused={focused} />
+            <TabIcon name="sets" color={color} focused={focused} />
           ),
         }}
       />
@@ -84,7 +112,7 @@ export default function TabLayout() {
         options={{
           title: "Kelimeler",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="▤" color={color} focused={focused} />
+            <TabIcon name="words" color={color} focused={focused} />
           ),
         }}
       />
@@ -94,10 +122,88 @@ export default function TabLayout() {
         options={{
           title: "Profil",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon="○" color={color} focused={focused} />
+            <TabIcon name="profile" color={color} focused={focused} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    width: 34,
+    height: 30,
+    borderRadius: theme.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  homeIcon: {
+    width: 19,
+    height: 18,
+    alignItems: "center",
+  },
+  homeRoof: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderBottomWidth: 8,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  homeBody: {
+    width: 14,
+    height: 11,
+    borderWidth: 1.8,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  gridIcon: {
+    width: 18,
+    height: 18,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 3,
+  },
+  gridCell: {
+    width: 7,
+    height: 7,
+    borderWidth: 1.8,
+    borderRadius: 2,
+  },
+  bookIcon: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.8,
+    borderRadius: 4,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  bookLine: {
+    width: 1.6,
+    height: 12,
+    borderRadius: 999,
+  },
+  profileIcon: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+  },
+  profileHead: {
+    width: 7,
+    height: 7,
+    borderWidth: 1.8,
+    borderRadius: 999,
+    marginBottom: 2,
+  },
+  profileBody: {
+    width: 15,
+    height: 8,
+    borderWidth: 1.8,
+    borderRadius: 999,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+});
