@@ -1,56 +1,127 @@
-# Welcome to your Expo app 👋
+# Kelimelik AI
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI destekli İngilizce kelime öğrenme uygulaması. Kelimeleri ezberlemek yerine anlam, örnek cümle ve pratik modlarıyla kullanmayı öğretir.
 
-## Get started
+**Canlı demo:** https://eren-baykara.github.io/vocab-coach-ai/
 
-1. Install dependencies
+## Özellikler
 
-   ```bash
-   npm install
-   ```
+- **Hızlı kelime ekleme** — Kelime anında kütüphaneye eklenir; AI içerik ve yazım kontrolü arka planda çalışır
+- **AI kelime kartları** — Türkçe anlam, tanım, fonetik, TOEFL/günlük örnekler, mini ders, eş/anlamdaşlar
+- **Yazım düzeltme** — Yazım hatası şüphesi varsa eklemeden sonra popup ile öneri sunar
+- **Çalışma setleri** — TOEFL, akademik veya günlük konuşma gibi odaklı setler; varsayılan **Tüm Kelimeler** görünümü
+- **Pratik modları**
+  - Anlam quizi
+  - Ters quiz (Türkçe → İngilizce)
+  - Boşluk doldurma
+  - Kart sıralama (çalışma oturumu)
+- **Kelime detayı** — Dinle (TTS), kişisel not, set yönetimi, AI içerik yenileme
+- **Onboarding** — Sınav hedefi (TOEFL / IELTS / Genel), İngilizce seviyesi, günlük süre
+- **PWA + Safari uyumu** — GitHub Pages üzerinde web/PWA; iOS Safari için özel alert ve modal desteği
 
-2. Start the app
+## Teknoloji
 
-   ```bash
-   npx expo start
-   ```
+| Katman | Stack |
+|--------|--------|
+| Uygulama | [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/), React Native, Expo Router |
+| Backend | [Supabase](https://supabase.com/) — Auth, Postgres, RLS, Edge Functions |
+| AI | OpenAI (`generate-word-content`, `suggest-word-correction`) |
+| Deploy | GitHub Actions → GitHub Pages |
 
-In the output, you'll find options to open the app in a
+## Proje yapısı
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/
+  app/                  # Expo Router ekranları
+    (tabs)/             # Bugün, Setler, Kelimeler, Profil
+    word/[id].tsx       # Kelime detayı
+    review.tsx          # Quiz modları
+    card-sort.tsx       # Kart sıralama
+    onboarding.tsx      # İlk kurulum
+  lib/
+    supabase.ts         # Supabase client
+    wordActions.ts      # Kelime ekleme / düzeltme
+    word-correction-context.tsx
+    app-alert.tsx       # Web uyumlu alert/confirm
+supabase/
+  migrations/           # Veritabanı şeması
+  functions/            # Edge Functions (AI)
+.github/workflows/      # GitHub Pages deploy
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Geliştirme
 
-### Other setup steps
+### Gereksinimler
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- Node.js 22+
+- npm
+- Supabase projesi (Auth + Postgres + Edge Functions)
+- OpenAI API anahtarı (Edge Function secrets)
 
-## Learn more
+### Kurulum
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+git clone https://github.com/eren-baykara/vocab-coach-ai.git
+cd vocab-coach-ai
+npm install
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Proje kökünde `.env` oluştur:
 
-## Join the community
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+```
 
-Join our community of developers creating universal apps.
+### Çalıştırma
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npm start          # Expo dev server
+npm run web        # Sadece web
+npm run export:web # Statik web export (GitHub Pages ile aynı çıktı)
+```
+
+### Supabase
+
+1. Migration'ları uygula:
+
+   ```bash
+   supabase db push
+   ```
+
+2. Edge function secret'larını ayarla:
+
+   - `OPENAI_API_KEY`
+   - `OPENAI_MODEL` (opsiyonel, varsayılan: `gpt-5-mini`)
+
+3. Function'ları deploy et:
+
+   ```bash
+   supabase functions deploy generate-word-content
+   supabase functions deploy suggest-word-correction
+   ```
+
+## GitHub Pages deploy
+
+`master` veya `main` branch'e push edildiğinde `.github/workflows/deploy-pages.yml` otomatik çalışır.
+
+Repository **Settings → Secrets and variables → Actions** altında şu secret'lar gerekli:
+
+| Secret | Açıklama |
+|--------|----------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase proje URL'i |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key |
+
+**Settings → Pages** bölümünde source olarak **GitHub Actions** seçilmeli; `github-pages` environment'ında deploy branch'i (`master` / `main`) izinli olmalı.
+
+Statik export `baseUrl: /vocab-coach-ai` ile üretilir (`app.json` → `experiments.baseUrl`). Farklı bir path kullanırsan `app.json` içindeki `baseUrl` değerini güncelle.
+
+## Ortam notları
+
+- Uygulama **hesap zorunludur**; misafir modu yoktur.
+- AI içerik üretimi arka planda çalışır; kelime listeye hemen düşer.
+- Safari iOS PWA'da güncelleme görünmüyorsa hard refresh yap veya ana ekran kısayolunu yeniden ekle.
+
+## Lisans
+
+Bu proje kişisel / eğitim amaçlıdır. Ticari kullanım veya yeniden dağıtım için repo sahibiyle iletişime geçin.
