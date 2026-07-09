@@ -110,7 +110,8 @@ export default function SetsScreen() {
   const [showCreateBox, setShowCreateBox] = useState(false);
   const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
 
-  const { queueCorrection, wordsChangeToken } = useWordCorrection();
+  const { queueCorrection, wordsChangeToken, notifyWordsChanged } =
+    useWordCorrection();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -440,6 +441,7 @@ export default function SetsScreen() {
     const targetWord = await addUserWord(cleanWord, {
       generateAi: true,
       setId: isAllWordsSet(expandedSetId) ? null : expandedSetId,
+      onAiComplete: notifyWordsChanged,
     });
 
     setSavingSetItem(false);
@@ -447,6 +449,7 @@ export default function SetsScreen() {
     if (!targetWord) return;
 
     setAddWordSearch("");
+    notifyWordsChanged();
     await loadSetsData();
   }
 

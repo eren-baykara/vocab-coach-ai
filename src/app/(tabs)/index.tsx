@@ -81,7 +81,8 @@ export default function HomeScreen() {
   const [addingWordWithAi, setAddingWordWithAi] = useState(false);
   const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
 
-  const { wordsChangeToken, queueCorrection } = useWordCorrection();
+  const { wordsChangeToken, queueCorrection, notifyWordsChanged } =
+    useWordCorrection();
 
   const [word, setWord] = useState("");
 
@@ -286,6 +287,12 @@ export default function HomeScreen() {
       return;
     }
 
+    if (shouldSkipCorrectionCheck(cleanWord)) {
+      setWord("");
+      await addConfirmedWord(cleanWord, generateAiAfterAdd);
+      return;
+    }
+
     setCheckingWordCorrection(true);
 
     const { data, error } = await supabase.functions.invoke(
@@ -340,12 +347,14 @@ export default function HomeScreen() {
     await addUserWord(cleanWord, {
       generateAi: generateAiAfterAdd,
       setId: quickAddSetId,
+      onAiComplete: notifyWordsChanged,
     });
 
     setAddingWord(false);
     setAddingWordWithAi(false);
 
     await refreshAll();
+    notifyWordsChanged();
   }
 
   function getContent(item: UserWord) {
@@ -1004,6 +1013,17 @@ export default function HomeScreen() {
       </ScrollView>
     </>
   );
+}
+
+function shouldSkipCorrectionCheck(word: string) {
+  const clean = word.trim();
+
+  if (clean.length < 2) return false;
+  if (!/^[A-Za-z][A-Za-z' -]*$/.test(clean)) return false;
+  if (/\d/.test(clean)) return false;
+  if (/(.)\1{2,}/.test(clean)) return false;
+
+  return true;
 }
 
 function getTodayLabel() {

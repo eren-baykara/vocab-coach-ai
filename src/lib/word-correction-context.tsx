@@ -26,6 +26,7 @@ export type PendingWordCorrection = {
 type WordCorrectionContextValue = {
   wordsChangeToken: number;
   queueCorrection: (correction: PendingWordCorrection) => void;
+  notifyWordsChanged: () => void;
 };
 
 const WordCorrectionContext = createContext<WordCorrectionContextValue | null>(
@@ -74,6 +75,7 @@ export function WordCorrectionProvider({
     await addUserWord(cleanWord, {
       generateAi: pendingCorrection.generateAiAfterAdd,
       setId: pendingCorrection.setId,
+      onAiComplete: bumpWordsChangeToken,
     });
 
     setApplyingCorrection(false);
@@ -117,8 +119,12 @@ export function WordCorrectionProvider({
   }
 
   const value = useMemo(
-    () => ({ wordsChangeToken, queueCorrection }),
-    [wordsChangeToken, queueCorrection]
+    () => ({
+      wordsChangeToken,
+      queueCorrection,
+      notifyWordsChanged: bumpWordsChangeToken,
+    }),
+    [wordsChangeToken, queueCorrection, bumpWordsChangeToken]
   );
 
   return (

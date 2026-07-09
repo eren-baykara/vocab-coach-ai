@@ -98,11 +98,15 @@ export async function findUserWordByInput(inputWord: string) {
 
 export async function addUserWord(
   cleanWord: string,
-  options: { generateAi?: boolean; setId?: string | null } = {}
+  options: {
+    generateAi?: boolean;
+    setId?: string | null;
+    onAiComplete?: () => void;
+  } = {}
 ) {
-  const { generateAi = false, setId = null } = options;
+  const { generateAi = false, setId = null, onAiComplete } = options;
 
-  const { error } = await supabase.rpc("add_user_word", {
+  const { data: userWordId, error } = await supabase.rpc("add_user_word", {
     input_word: cleanWord,
   });
 
@@ -111,22 +115,19 @@ export async function addUserWord(
     return null;
   }
 
-  const targetWord = await findUserWordByInput(cleanWord);
-
-  if (!targetWord) {
-    Alert.alert(
-      "Kelime eklendi",
-      "Kelime Library'ye eklendi ama sonraki adım için bulunamadı."
-    );
+  if (!userWordId || typeof userWordId !== "string") {
+    Alert.alert("Kelime eklenemedi", "Kelime kaydedildi ama kimliği alınamadı.");
     return null;
   }
+
+  const targetWord = { id: userWordId };
 
   if (setId) {
     const { error: setError } = await supabase
       .from("word_set_items")
       .insert({
         set_id: setId,
-        user_word_id: targetWord.id,
+        user_word_id: userWordId,
       });
 
     if (setError && setError.code !== "23505") {
@@ -135,21 +136,22 @@ export async function addUserWord(
   }
 
   if (generateAi) {
-    const { error: aiError } = await supabase.functions.invoke(
-      "generate-word-content",
-      {
+    void supabase.functions
+      .invoke("generate-word-content", {
         body: {
-          user_word_id: targetWord.id,
+          user_word_id: userWordId,
         },
-      }
-    );
+      })
+      .then(async ({ error: aiError }) => {
+        if (aiError) {
+          Alert.alert(
+            "AI içeriği oluşturulamadı",
+            await getFunctionErrorMessage(aiError)
+          );
+        }
 
-    if (aiError) {
-      Alert.alert(
-        "Kelime eklendi ama AI başarısız oldu",
-        await getFunctionErrorMessage(aiError)
-      );
-    }
+        onAiComplete?.();
+      });
   }
 
   return targetWord;
