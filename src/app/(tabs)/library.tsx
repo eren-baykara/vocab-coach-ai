@@ -29,6 +29,7 @@ type UserWord = {
   status: string | null;
   created_at: string;
   next_review_at: string | null;
+  ai_content_disabled: boolean | null;
   word_contents: WordContent | WordContent[] | null;
 };
 
@@ -40,6 +41,7 @@ const LIBRARY_SELECT = `
   status,
   created_at,
   next_review_at,
+  ai_content_disabled,
   word_contents (
     display_word,
     normalized_word,
@@ -125,8 +127,12 @@ export default function LibraryScreen() {
       const content = getContent(item);
       const displayWord = content?.display_word?.toLowerCase() ?? "";
       const normalizedWord = content?.normalized_word?.toLowerCase() ?? "";
-      const meaning = content?.turkish_meaning?.toLowerCase() ?? "";
-      const definition = content?.simple_definition?.toLowerCase() ?? "";
+      const meaning = item.ai_content_disabled
+        ? ""
+        : content?.turkish_meaning?.toLowerCase() ?? "";
+      const definition = item.ai_content_disabled
+        ? ""
+        : content?.simple_definition?.toLowerCase() ?? "";
 
       const matchesSearch =
         !cleanSearch ||
@@ -259,7 +265,9 @@ export default function LibraryScreen() {
               >
                 <View style={[styles.partBadge, statusMeta.partStyle]}>
                   <Text style={[styles.partBadgeText, statusMeta.partTextStyle]}>
-                    {getPartAbbreviation(getContent(item)?.part_of_speech)}
+                    {item.ai_content_disabled
+                      ? "KLM"
+                      : getPartAbbreviation(getContent(item)?.part_of_speech)}
                   </Text>
                 </View>
 
@@ -306,12 +314,16 @@ function getDisplayWord(item: UserWord) {
 }
 
 function getPrimaryMeaning(item: UserWord) {
+  if (item.ai_content_disabled) return "";
+
   const content = getContent(item);
 
   return content?.turkish_meaning ?? "";
 }
 
 function getSecondaryText(item: UserWord) {
+  if (item.ai_content_disabled) return "";
+
   const content = getContent(item);
 
   return content?.simple_definition ?? content?.mini_lesson ?? "";
