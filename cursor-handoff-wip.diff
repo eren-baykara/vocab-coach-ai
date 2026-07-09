@@ -1,0 +1,128 @@
+diff --git a/src/app/(tabs)/index.tsx b/src/app/(tabs)/index.tsx
+index 2edc72c..cb3a5d8 100644
+--- a/src/app/(tabs)/index.tsx
++++ b/src/app/(tabs)/index.tsx
+@@ -33,6 +33,7 @@ type UserWord = {
+   status: string | null;
+   created_at: string;
+   next_review_at: string | null;
++  ai_content_disabled: boolean | null;
+   word_contents: WordContent | WordContent[] | null;
+ };
+ 
+@@ -165,6 +166,7 @@ export default function HomeScreen() {
+         status,
+         created_at,
+         next_review_at,
++        ai_content_disabled,
+         word_contents (
+           display_word,
+           normalized_word,
+@@ -392,27 +394,36 @@ export default function HomeScreen() {
+     );
+   }
+ 
+-  async function confirmCorrectionSelection(selectedWord: string) {
++  async function confirmCorrectionSelection(
++    selectedWord: string,
++    disableAiContent = false
++  ) {
+     const cleanWord = selectedWord.trim();
+ 
+     if (!cleanWord) return;
+ 
+-    const generateAiAfterAdd = pendingGenerateAiAfterAdd;
++    const generateAiAfterAdd = disableAiContent
++      ? false
++      : pendingGenerateAiAfterAdd;
+ 
+     setPendingCorrection(null);
+     setPendingGenerateAiAfterAdd(false);
+     setWord(cleanWord);
+ 
+-    await addConfirmedWord(cleanWord, generateAiAfterAdd);
++    await addConfirmedWord(cleanWord, generateAiAfterAdd, disableAiContent);
+   }
+ 
+-  async function addConfirmedWord(cleanWord: string, generateAiAfterAdd = false) {
++  async function addConfirmedWord(
++    cleanWord: string,
++    generateAiAfterAdd = false,
++    disableAiContent = false
++  ) {
+     if (!cleanWord) {
+       Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
+       return;
+     }
+ 
+-    if (generateAiAfterAdd) {
++    if (generateAiAfterAdd && !disableAiContent) {
+       setAddingWordWithAi(true);
+     } else {
+       setAddingWord(true);
+@@ -444,6 +455,21 @@ export default function HomeScreen() {
+       return;
+     }
+ 
++    if (disableAiContent) {
++      const { error: disableAiError } = await supabase
++        .from("user_words")
++        .update({ ai_content_disabled: true })
++        .eq("id", targetWord.id);
++
++      if (disableAiError) {
++        setAddingWord(false);
++        setAddingWordWithAi(false);
++        setPendingGenerateAiAfterAdd(false);
++        Alert.alert("Kelime eklendi ama AI kapatılamadı", disableAiError.message);
++        return;
++      }
++    }
++
+     if (selectedSetId) {
+       const { error: setError } = await supabase
+         .from("word_set_items")
+@@ -599,6 +625,8 @@ export default function HomeScreen() {
+   }
+ 
+   function hasAiContent(item: UserWord) {
++    if (item.ai_content_disabled) return false;
++
+     const content = getContent(item);
+ 
+     return Boolean(
+@@ -609,18 +637,24 @@ export default function HomeScreen() {
+   }
+ 
+   function hasMeaningPracticeContent(item: UserWord) {
++    if (item.ai_content_disabled) return false;
++
+     const content = getContent(item);
+ 
+     return Boolean(content?.turkish_meaning);
+   }
+ 
+   function hasReversePracticeContent(item: UserWord) {
++    if (item.ai_content_disabled) return false;
++
+     const content = getContent(item);
+ 
+     return Boolean(content?.turkish_meaning || content?.simple_definition);
+   }
+ 
+   function hasFillPracticeContent(item: UserWord) {
++    if (item.ai_content_disabled) return false;
++
+     const content = getContent(item);
+ 
+     const hasMeaning = Boolean(content?.turkish_meaning || content?.simple_definition);
+@@ -1253,7 +1287,8 @@ export default function HomeScreen() {
+                   style={styles.todayCorrectionOriginalChip}
+                   onPress={() =>
+                     confirmCorrectionSelection(
+-                      pendingCorrection.original_word || word
++                      pendingCorrection.original_word || word,
++                      true
+                     )
+                   }
+                   disabled={wordActionLoading}
