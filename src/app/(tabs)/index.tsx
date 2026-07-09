@@ -89,6 +89,12 @@ export default function HomeScreen() {
   const [sets, setSets] = useState<WordSet[]>([]);
   const [setItems, setSetItems] = useState<WordSetItem[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
+  const [quickAddSetId, setQuickAddSetId] = useState<string | null>(null);
+
+  function selectStudySet(setId: string | null) {
+    setSelectedSetId(setId);
+    setQuickAddSetId(setId);
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -211,6 +217,7 @@ export default function HomeScreen() {
       setSets([]);
       setSetItems([]);
       setSelectedSetId(null);
+      setQuickAddSetId(null);
     }
   }, [session, loadWords, loadSets]);
 
@@ -310,7 +317,7 @@ export default function HomeScreen() {
         originalWord: cleanWord,
         suggestion,
         generateAiAfterAdd,
-        setId: selectedSetId,
+        setId: quickAddSetId,
       });
       return;
     }
@@ -332,7 +339,7 @@ export default function HomeScreen() {
 
     await addUserWord(cleanWord, {
       generateAi: generateAiAfterAdd,
-      setId: selectedSetId,
+      setId: quickAddSetId,
     });
 
     setAddingWord(false);
@@ -433,10 +440,6 @@ export default function HomeScreen() {
     };
   }
 
-  function formatSetStats(stats: { total: number; ready: number; due: number }) {
-    return `${stats.total} words • ${stats.ready} ready • ${stats.due} today`;
-  }
-
   const selectedSet = sets.find((set) => set.id === selectedSetId) ?? null;
 
   const visibleWords = useMemo(() => {
@@ -460,19 +463,6 @@ export default function HomeScreen() {
     (item) => hasFillPracticeContent(item) && isDue(item)
   ).length;
   const dueCount = visibleWords.filter((item) => hasAiContent(item) && isDue(item)).length;
-
-  const practiceScopeLabel = selectedSet ? "this set" : "your Library";
-  const emptyPracticeText = selectedSet
-    ? "This set is empty. Add words to start practicing."
-    : "Add words or create a set to start practicing.";
-  const practiceSummaryText =
-    visibleWords.length === 0
-      ? emptyPracticeText
-      : aiReadyCount === 0
-        ? "Open a word and generate AI content before practicing."
-        : dueCount === 0
-          ? `No scheduled review in ${practiceScopeLabel} right now.`
-          : `Practice today’s review words in ${practiceScopeLabel}.`;
 
   const wordActionLoading =
     addingWord || addingWordWithAi || checkingWordCorrection;
@@ -647,19 +637,9 @@ export default function HomeScreen() {
 
   const todayLabel = getTodayLabel();
   const scopeLabel = selectedSet ? selectedSet.name : "Tüm kelimeler";
-  const readyPercent =
-    visibleWords.length > 0
-      ? Math.min(100, Math.round((aiReadyCount / visibleWords.length) * 100))
-      : 0;
-  const reviewPercent =
-    aiReadyCount > 0 ? Math.min(100, Math.round((dueCount / aiReadyCount) * 100)) : 0;
-  const featuredWord =
-    visibleWords.find(hasAiContent) ?? visibleWords[0] ?? words[0] ?? null;
-  const featuredWordText = featuredWord ? getDisplayWord(featuredWord) : "context";
-  const setCards = sets.slice(0, 2).map((set) => ({
-    set,
-    stats: getSetStats(set.id),
-  }));
+  const quickAddTargetLabel = quickAddSetId
+    ? (sets.find((set) => set.id === quickAddSetId)?.name ?? "Set")
+    : "Sadece kütüphane";
 
   return (
     <>
@@ -673,141 +653,88 @@ export default function HomeScreen() {
           <View style={styles.todayHeaderText}>
             <Text style={styles.todayDate}>{todayLabel}</Text>
             <Text style={styles.todayGreeting}>Merhaba 👋</Text>
-            <Text style={styles.todaySubtitle}>Bugünün çalışması hazır.</Text>
           </View>
 
-          <View style={styles.todayBellButton}>
-            <Text style={styles.todayBellIcon}>🔔</Text>
-          </View>
-        </View>
-
-        <View style={styles.todayMetricGrid}>
-          <View style={styles.todayMetricCard}>
-            <Text style={styles.todayMetricIcon}>🔥</Text>
-            <Text style={styles.todayMetricValue}>{dueCount}</Text>
-            <Text style={styles.todayMetricLabel}>bugün</Text>
-          </View>
-
-          <View style={styles.todayMetricCard}>
-            <Text style={styles.todayMetricIcon}>📚</Text>
-            <Text style={styles.todayMetricValue}>{aiReadyCount}</Text>
-            <Text style={styles.todayMetricLabel}>hazır</Text>
-          </View>
-
-          <View style={styles.todayMetricCard}>
-            <Text style={styles.todayMetricIcon}>🎯</Text>
-            <Text style={styles.todayMetricValue}>{readyPercent}%</Text>
-            <Text style={styles.todayMetricLabel}>AI oranı</Text>
+          <View style={styles.todayHeaderStat}>
+            <Text style={styles.todayHeaderStatValue}>{dueCount}</Text>
+            <Text style={styles.todayHeaderStatLabel}>tekrar</Text>
           </View>
         </View>
 
-        <View style={styles.todayQuickAddCard}>
-          <View style={styles.todayQuickAddHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.todayQuickAddEyebrow}>Hızlı Ekle</Text>
-              <Text style={styles.todayQuickAddTitle}>Yeni kelime ekle</Text>
-            </View>
+        <View style={styles.todayScopeSection}>
+          <View style={styles.todaySectionHeader}>
+            <Text style={styles.todaySectionTitle}>Çalışma Seti</Text>
+            <Pressable onPress={() => router.push("/sets" as never)}>
+              <Text style={styles.todaySectionAction}>Setleri yönet →</Text>
+            </Pressable>
+          </View>
 
-            <View style={styles.todayQuickAddScope}>
-              <Text style={styles.todayQuickAddScopeText} numberOfLines={1}>
-                {selectedSet ? selectedSet.name : "Kütüphane"}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.todayScopeScroll}
+          >
+            <Pressable
+              style={[
+                styles.todayScopeChip,
+                selectedSetId === null && styles.todayScopeChipActive,
+              ]}
+              onPress={() => selectStudySet(null)}
+            >
+              <Text
+                style={[
+                  styles.todayScopeChipText,
+                  selectedSetId === null && styles.todayScopeChipTextActive,
+                ]}
+              >
+                Tüm Kelimeler
               </Text>
-            </View>
-          </View>
+              <Text
+                style={[
+                  styles.todayScopeChipMeta,
+                  selectedSetId === null && styles.todayScopeChipMetaActive,
+                ]}
+              >
+                {libraryStats.total} kelime
+              </Text>
+            </Pressable>
 
-          <TextInput
-            style={styles.todayQuickAddInput}
-            placeholder="Örn: usually"
-            placeholderTextColor={theme.colors.textSubtle}
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={word}
-            onChangeText={setWord}
-            editable={!wordActionLoading}
-            onSubmitEditing={() => handleAddWord(false)}
-            returnKeyType="done"
-          />
+            {sets.map((set) => {
+              const stats = getSetStats(set.id);
+              const isActive = selectedSetId === set.id;
 
-          {wordSuggestions.length > 0 ? (
-            <View style={styles.todaySuggestionsWrap}>
-              {wordSuggestions.map((suggestion) => (
+              return (
                 <Pressable
-                  key={suggestion}
-                  style={styles.todaySuggestionChip}
-                  onPress={() => setWord(suggestion)}
+                  key={set.id}
+                  style={[
+                    styles.todayScopeChip,
+                    isActive && styles.todayScopeChipActive,
+                  ]}
+                  onPress={() => selectStudySet(set.id)}
                 >
-                  <Text style={styles.todaySuggestionText}>{suggestion}</Text>
+                  <Text
+                    style={[
+                      styles.todayScopeChipText,
+                      isActive && styles.todayScopeChipTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {set.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todayScopeChipMeta,
+                      isActive && styles.todayScopeChipMetaActive,
+                    ]}
+                  >
+                    {stats.due > 0
+                      ? `${stats.due} bugün`
+                      : `${stats.total} kelime`}
+                  </Text>
                 </Pressable>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.todayQuickAddActions}>
-            <Pressable
-              style={[
-                styles.todayQuickAddPrimary,
-                wordActionLoading && styles.todayPrimaryButtonDisabled,
-              ]}
-              onPress={() => handleAddWord(true)}
-              disabled={wordActionLoading}
-            >
-              <Text style={styles.todayQuickAddPrimaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWordWithAi
-                    ? "AI hazırlanıyor..."
-                    : "Ekle + AI Oluştur"}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.todayQuickAddSecondary,
-                wordActionLoading && styles.todayPrimaryButtonDisabled,
-              ]}
-              onPress={() => handleAddWord(false)}
-              disabled={wordActionLoading}
-            >
-              <Text style={styles.todayQuickAddSecondaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWord
-                    ? "Ekleniyor..."
-                    : "Sadece Ekle"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.todayGoalCard}>
-          <View style={styles.todayGoalHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.todayGoalTitle}>Günlük Odak</Text>
-              <Text style={styles.todayGoalText}>
-                {visibleWords.length === 0
-                  ? "Bugün çalışmak için kelime ekle."
-                  : `${scopeLabel} içinde ${dueCount} kelime tekrar bekliyor.`}
-              </Text>
-            </View>
-
-            <View style={styles.todayGoalBadge}>
-              <Text style={styles.todayGoalBadgeText}>{reviewPercent}%</Text>
-            </View>
-          </View>
-
-          <View style={styles.todayProgressTrack}>
-            <View
-              style={[
-                styles.todayProgressFill,
-                { width: `${Math.max(8, reviewPercent)}%` },
-              ]}
-            />
-          </View>
-
-          <View style={styles.todayGoalMetaRow}>
-            <Text style={styles.todayGoalMeta}>{dueCount} tekrar</Text>
-            <Text style={styles.todayGoalMeta}>{aiReadyCount} hazır kelime</Text>
-          </View>
+              );
+            })}
+          </ScrollView>
         </View>
 
         <View style={styles.todayStudyCard}>
@@ -820,8 +747,11 @@ export default function HomeScreen() {
               <Text style={styles.todayStudyEyebrow}>{scopeLabel}</Text>
               <Text style={styles.todayStudyTitle}>Bugünün Çalışması</Text>
               <Text style={styles.todayStudyText}>
-                Önce kartları ayır, sonra quizlerle kelimeyi gerçekten kullanmayı
-                öğren.
+                {visibleWords.length === 0
+                  ? "Bu kapsamda henüz kelime yok."
+                  : dueCount > 0
+                    ? `${dueCount} kelime tekrar bekliyor.`
+                    : "Bugün tekrar yok, yine de çalışabilirsin."}
               </Text>
             </View>
           </View>
@@ -950,76 +880,125 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.todayTipCard}>
-          <View style={styles.todayTipIconWrap}>
-            <Text style={styles.todayTipIcon}>✨</Text>
-          </View>
+        <View style={styles.todayQuickAddCard}>
+          <Text style={styles.todayQuickAddEyebrow}>Hızlı Ekle</Text>
+          <Text style={styles.todayQuickAddTitle}>Yeni kelime ekle</Text>
 
-          <View style={styles.todayTipTextWrap}>
-            <Text style={styles.todayTipTitle}>AI Öğrenme İpucu</Text>
-            <Text style={styles.todayTipText}>
-              “{featuredWordText}” kelimesini sadece anlamıyla değil, örnek cümle
-              içinde nasıl kullanıldığını görerek çalış.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.todaySetsSection}>
-          <View style={styles.todaySectionHeader}>
-            <Text style={styles.todaySectionTitle}>Aktif Setler</Text>
-
-            <Pressable onPress={() => router.push("/sets" as never)}>
-              <Text style={styles.todaySectionAction}>Tümü →</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.todaySetList}>
+          <Text style={styles.todayQuickAddTargetLabel}>Eklenecek yer</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.todayQuickAddTargetScroll}
+          >
             <Pressable
               style={[
-                styles.todaySetCard,
-                selectedSetId === null && styles.todaySetCardActive,
+                styles.todayQuickAddTargetChip,
+                quickAddSetId === null && styles.todayQuickAddTargetChipActive,
               ]}
-              onPress={() => setSelectedSetId(null)}
+              onPress={() => setQuickAddSetId(null)}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.todaySetTitle}>Tüm Kelimeler</Text>
-                <Text style={styles.todaySetMeta}>
-                  {libraryStats.total} kelime • {libraryStats.ready} hazır
-                </Text>
-              </View>
-
-              <Text style={styles.todaySetPercent}>
-                {libraryStats.total > 0
-                  ? Math.round((libraryStats.ready / libraryStats.total) * 100)
-                  : 0}
-                %
+              <Text
+                style={[
+                  styles.todayQuickAddTargetChipText,
+                  quickAddSetId === null && styles.todayQuickAddTargetChipTextActive,
+                ]}
+              >
+                Sadece kütüphane
               </Text>
             </Pressable>
 
-            {setCards.map(({ set, stats }) => (
-              <Pressable
-                key={set.id}
-                style={[
-                  styles.todaySetCard,
-                  selectedSetId === set.id && styles.todaySetCardActive,
-                ]}
-                onPress={() => setSelectedSetId(set.id)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.todaySetTitle}>{set.name}</Text>
-                  <Text style={styles.todaySetMeta}>
-                    {stats.total} kelime • {stats.due} bugün
-                  </Text>
-                </View>
+            {sets.map((set) => {
+              const isActive = quickAddSetId === set.id;
 
-                <Text style={styles.todaySetPercent}>
-                  {stats.total > 0
-                    ? Math.round((stats.ready / stats.total) * 100)
-                    : 0}
-                  %
-                </Text>
-              </Pressable>
-            ))}
+              return (
+                <Pressable
+                  key={set.id}
+                  style={[
+                    styles.todayQuickAddTargetChip,
+                    isActive && styles.todayQuickAddTargetChipActive,
+                  ]}
+                  onPress={() => setQuickAddSetId(set.id)}
+                >
+                  <Text
+                    style={[
+                      styles.todayQuickAddTargetChipText,
+                      isActive && styles.todayQuickAddTargetChipTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {set.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={styles.todayQuickAddTargetHint}>
+            Kelime her zaman kütüphaneye eklenir
+            {quickAddSetId ? ` ve “${quickAddTargetLabel}” setine atanır.` : "."}
+          </Text>
+
+          <TextInput
+            style={styles.todayQuickAddInput}
+            placeholder="Örn: usually"
+            placeholderTextColor={theme.colors.textSubtle}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={word}
+            onChangeText={setWord}
+            editable={!wordActionLoading}
+            onSubmitEditing={() => handleAddWord(false)}
+            returnKeyType="done"
+          />
+
+          {wordSuggestions.length > 0 ? (
+            <View style={styles.todaySuggestionsWrap}>
+              {wordSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion}
+                  style={styles.todaySuggestionChip}
+                  onPress={() => setWord(suggestion)}
+                >
+                  <Text style={styles.todaySuggestionText}>{suggestion}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.todayQuickAddActions}>
+            <Pressable
+              style={[
+                styles.todayQuickAddPrimary,
+                wordActionLoading && styles.todayPrimaryButtonDisabled,
+              ]}
+              onPress={() => handleAddWord(true)}
+              disabled={wordActionLoading}
+            >
+              <Text style={styles.todayQuickAddPrimaryText}>
+                {checkingWordCorrection
+                  ? "Kontrol ediliyor..."
+                  : addingWordWithAi
+                    ? "AI hazırlanıyor..."
+                    : "Ekle + AI Oluştur"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.todayQuickAddSecondary,
+                wordActionLoading && styles.todayPrimaryButtonDisabled,
+              ]}
+              onPress={() => handleAddWord(false)}
+              disabled={wordActionLoading}
+            >
+              <Text style={styles.todayQuickAddSecondaryText}>
+                {checkingWordCorrection
+                  ? "Kontrol ediliyor..."
+                  : addingWord
+                    ? "Ekleniyor..."
+                    : "Sadece Ekle"}
+              </Text>
+            </Pressable>
           </View>
         </View>
       </ScrollView>
@@ -1073,7 +1052,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
   },
   todayHeaderText: {
     flex: 1,
@@ -1087,61 +1066,70 @@ const styles = StyleSheet.create({
   },
   todayGreeting: {
     color: theme.colors.text,
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "900",
-    lineHeight: 38,
+    lineHeight: 34,
   },
-  todaySubtitle: {
-    marginTop: theme.spacing.xs,
-    color: theme.colors.textMuted,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  todayBellButton: {
-    width: 46,
-    height: 46,
-    borderRadius: theme.radius.lg,
+  todayHeaderStat: {
+    minWidth: 58,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.primarySurface,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    ...theme.shadow.card,
   },
-  todayBellIcon: {
-    fontSize: 19,
-  },
-  todayMetricGrid: {
-    flexDirection: "row",
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
-  },
-  todayMetricCard: {
-    flex: 1,
-    minHeight: 98,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    ...theme.shadow.card,
-  },
-  todayMetricIcon: {
-    fontSize: 19,
-    marginBottom: theme.spacing.sm,
-  },
-  todayMetricValue: {
-    color: theme.colors.text,
-    fontSize: 24,
+  todayHeaderStatValue: {
+    color: theme.colors.primary,
+    fontSize: 22,
     fontWeight: "900",
-    lineHeight: 28,
+    lineHeight: 26,
   },
-  todayMetricLabel: {
-    marginTop: 2,
+  todayHeaderStatLabel: {
     color: theme.colors.textMuted,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
+  },
+  todayScopeSection: {
+    marginBottom: theme.spacing.lg,
+  },
+  todayScopeScroll: {
+    gap: theme.spacing.sm,
+    paddingRight: theme.spacing.xl,
+  },
+  todayScopeChip: {
+    minWidth: 132,
+    maxWidth: 180,
+    borderRadius: theme.radius.xl,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card,
+  },
+  todayScopeChipActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySurface,
+  },
+  todayScopeChipText: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  todayScopeChipTextActive: {
+    color: theme.colors.primaryDark,
+  },
+  todayScopeChipMeta: {
+    marginTop: theme.spacing.xs,
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  todayScopeChipMetaActive: {
+    color: theme.colors.primary,
   },
   todayGoalCard: {
     borderRadius: theme.radius["2xl"],
@@ -1434,14 +1422,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    marginBottom: theme.spacing.xl,
     ...theme.shadow.card,
-  },
-  todayQuickAddHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
   },
   todayQuickAddEyebrow: {
     color: theme.colors.primary,
@@ -1455,18 +1437,47 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 20,
     fontWeight: "900",
+    marginBottom: theme.spacing.md,
   },
-  todayQuickAddScope: {
-    maxWidth: 128,
+  todayQuickAddTargetLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: theme.spacing.sm,
+  },
+  todayQuickAddTargetScroll: {
+    gap: theme.spacing.sm,
+    paddingRight: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  todayQuickAddTargetChip: {
     borderRadius: theme.radius.pill,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     backgroundColor: theme.colors.surfaceSoft,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  todayQuickAddScopeText: {
+  todayQuickAddTargetChipActive: {
+    backgroundColor: theme.colors.primarySurface,
+    borderColor: theme.colors.primary,
+  },
+  todayQuickAddTargetChipText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  todayQuickAddTargetChipTextActive: {
+    color: theme.colors.primaryDark,
+  },
+  todayQuickAddTargetHint: {
     color: theme.colors.textMuted,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
+    lineHeight: 18,
+    marginBottom: theme.spacing.md,
   },
   todayQuickAddInput: {
     height: 50,
