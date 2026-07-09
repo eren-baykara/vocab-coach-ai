@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import * as Speech from "expo-speech";
+import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../lib/supabase";
 import { theme } from "../theme";
@@ -19,6 +21,8 @@ type WordContent = {
   normalized_word: string | null;
   simple_definition: string | null;
   turkish_meaning: string | null;
+  part_of_speech: string | null;
+  phonetic: string | null;
   toefl_example: string | null;
   toefl_example_tr: string | null;
   daily_life_example: string | null;
@@ -46,6 +50,8 @@ const CARD_SORT_SELECT = `
     normalized_word,
     simple_definition,
     turkish_meaning,
+    part_of_speech,
+    phonetic,
     toefl_example,
     toefl_example_tr,
     daily_life_example_tr,
@@ -75,6 +81,7 @@ export default function CardSortScreen() {
 
   const [knownWordIds, setKnownWordIds] = useState<string[]>([]);
   const [learningWordIds, setLearningWordIds] = useState<string[]>([]);
+  const [speaking, setSpeaking] = useState(false);
   const [newSetName, setNewSetName] = useState(
     selectedSetName ? `${selectedSetName} - Still Learning` : "Still Learning"
   );
@@ -138,7 +145,37 @@ export default function CardSortScreen() {
     loadWords();
   }, [loadWords]);
 
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    Speech.stop();
+    setSpeaking(false);
+  }, [currentIndex]);
+
   const currentWord = words[currentIndex];
+
+  async function speakCurrentWord() {
+    if (!currentWord) return;
+
+    const word = getDisplayWord(currentWord).trim();
+
+    if (!word) return;
+
+    await Speech.stop();
+    setSpeaking(true);
+
+    Speech.speak(word, {
+      language: "en-US",
+      rate: 0.92,
+      onDone: () => setSpeaking(false),
+      onStopped: () => setSpeaking(false),
+      onError: () => setSpeaking(false),
+    });
+  }
   const complete = !loading && words.length > 0 && currentIndex >= words.length;
   const scopeTitle = selectedSetName ?? "Kelimelerim";
   const currentContent = currentWord ? getContent(currentWord) : null;
@@ -411,13 +448,71 @@ export default function CardSortScreen() {
 
             <View style={styles.hiddenCardContent}>
               <Text style={styles.directionLabel}>İNG → TR</Text>
-              <Text style={styles.hiddenWord}>{getDisplayWord(currentWord)}</Text>
-              <Text style={styles.aiBadge}>AI kartı</Text>
+
+              <View style={styles.wordWithListenRow}>
+                <Text style={styles.hiddenWord}>{getDisplayWord(currentWord)}</Text>
+
+                <Pressable
+                  style={[
+                    styles.cardListenButton,
+                    speaking && styles.cardListenButtonActive,
+                  ]}
+                  onPress={speakCurrentWord}
+                  disabled={speaking}
+                  accessibilityLabel="Kelimeyi dinle"
+                  accessibilityRole="button"
+                >
+                  <Ionicons
+                    name="volume-high"
+                    size={18}
+                    color={theme.colors.primary}
+                  />
+                </Pressable>
+              </View>
+
+              {currentContent?.phonetic ? (
+                <Text style={styles.phoneticText}>
+                  {formatPhonetic(currentContent.phonetic)}
+                </Text>
+              ) : null}
+
+              {getPartOfSpeechLabel(currentContent) ? (
+                <View style={styles.posBadge}>
+                  <Text style={styles.posBadgeText}>
+                    {getPartOfSpeechLabel(currentContent)}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </>
         ) : (
           <View style={styles.revealedContent}>
-            <Text style={styles.revealedWord}>{getDisplayWord(currentWord)}</Text>
+            <View style={styles.wordWithListenRow}>
+              <Text style={styles.revealedWord}>{getDisplayWord(currentWord)}</Text>
+
+              <Pressable
+                style={[
+                  styles.cardListenButton,
+                  speaking && styles.cardListenButtonActive,
+                ]}
+                onPress={speakCurrentWord}
+                disabled={speaking}
+                accessibilityLabel="Kelimeyi dinle"
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name="volume-high"
+                  size={16}
+                  color={theme.colors.primary}
+                />
+              </Pressable>
+            </View>
+
+            {currentContent?.phonetic ? (
+              <Text style={styles.phoneticText}>
+                {formatPhonetic(currentContent.phonetic)}
+              </Text>
+            ) : null}
 
             <View style={styles.meaningBox}>
               <Text style={styles.meaningText}>{getMeaning(currentWord)}</Text>
@@ -518,6 +613,45 @@ function getExample(item: SortWord) {
   const content = getContent(item);
 
   return content?.daily_life_example || content?.toefl_example || "";
+}
+
+function formatPhonetic(phonetic: string) {
+  const trimmed = phonetic.trim();
+
+  if (!trimmed) return "";
+
+  return trimmed.startsWith("/") && trimmed.endsWith("/")
+    ? trimmed
+    : `/${trimmed}/`;
+}
+
+function getPartOfSpeechLabel(content: WordContent | null) {
+  switch (content?.part_of_speech?.trim().toLowerCase()) {
+    case "noun":
+      return "isim";
+    case "verb":
+      return "fiil";
+    case "adjective":
+      return "sıfat";
+    case "adverb":
+      return "zarf";
+    case "phrase":
+      return "deyim";
+    case "phrasal verb":
+      return "deyimsel fiil";
+    case "preposition":
+      return "edat";
+    case "conjunction":
+      return "bağlaç";
+    case "interjection":
+      return "ünlem";
+    case "determiner":
+      return "belirteç";
+    case "pronoun":
+      return "zamir";
+    default:
+      return null;
+  }
 }
 
 function hasAiContent(content: WordContent | null) {
@@ -712,21 +846,48 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 18,
   },
+  wordWithListenRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
   hiddenWord: {
     color: theme.colors.text,
     fontSize: 42,
     fontWeight: "900",
     letterSpacing: -1,
     textAlign: "center",
+  },
+  cardListenButton: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: theme.colors.primarySurface,
+  },
+  cardListenButtonActive: {
+    backgroundColor: theme.colors.primarySoft,
+  },
+  phoneticText: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    fontWeight: "700",
+    fontStyle: "italic",
+    textAlign: "center",
     marginBottom: 12,
   },
-  aiBadge: {
-    overflow: "hidden",
-    color: theme.colors.accent,
+  posBadge: {
+    alignSelf: "center",
     backgroundColor: theme.colors.accentSoft,
     borderRadius: 999,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
+  },
+  posBadgeText: {
+    color: theme.colors.accent,
     fontSize: 12,
     fontWeight: "900",
   },
@@ -739,7 +900,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -0.5,
     textAlign: "center",
-    marginBottom: 18,
   },
   meaningBox: {
     width: "100%",
