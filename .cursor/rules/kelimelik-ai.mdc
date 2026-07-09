@@ -1,0 +1,36 @@
+# Kelimelik AI Project Rules
+
+You are working on Kelimelik AI, an Expo React Native + TypeScript + Supabase vocabulary learning app.
+
+Core stack:
+- Expo React Native
+- TypeScript
+- Expo Router
+- Supabase Auth, DB, RLS, Edge Functions
+- OpenAI must only be used through Supabase Edge Functions
+- Never put OpenAI API keys in frontend code
+
+Important product rules:
+- Word adding must stay fast and low-friction.
+- Do not add confirmation steps for every word.
+- Only show correction/confirmation when the typed word is suspicious or AI suggests a meaningfully different word.
+- “Yazdığım gibi ekle” means: add exactly what the user typed, do not generate AI content, and do not show cached AI content for that user word.
+- Practice info must not be shown in Word Detail.
+- Fill-in-the-blank belongs only in practice screens.
+- Do not add fake Google login, fake language selector, or fake forgot-password flows unless real backend support exists.
+
+Design rules:
+- Warm cream / terracotta / orange visual language.
+- Avoid generic blue SaaS UI.
+- Use rounded premium mobile cards.
+- Keep the app feeling simple, friendly, and focused.
+
+Development rules:
+- Inspect files before patching.
+- Prefer small patches.
+- After every patch, run:
+  npx tsc --noEmit
+- Check git status before and after changes.
+- Do not touch Supabase migrations or Edge Functions without explaining why.
+- Do not change database shape casually.
+- Do not remove existing AI/Supabase infrastructure unless explicitly asked.
