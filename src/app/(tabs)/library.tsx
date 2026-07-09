@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import * as Speech from "expo-speech";
+import { Ionicons } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
@@ -66,6 +68,7 @@ export default function LibraryScreen() {
   const [words, setWords] = useState<UserWord[]>([]);
   const [searchText, setSearchText] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<LearningFilter>("all");
+  const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -83,6 +86,29 @@ export default function LibraryScreen() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
+
+  async function speakWord(item: UserWord) {
+    const word = getContent(item)?.normalized_word?.trim();
+
+    if (!word) return;
+
+    await Speech.stop();
+    setSpeakingWordId(item.id);
+
+    Speech.speak(word, {
+      language: "en-US",
+      rate: 0.92,
+      onDone: () => setSpeakingWordId(null),
+      onStopped: () => setSpeakingWordId(null),
+      onError: () => setSpeakingWordId(null),
+    });
+  }
 
   const loadWords = useCallback(async () => {
     if (!session) return;
@@ -287,10 +313,32 @@ export default function LibraryScreen() {
                   ) : null}
                 </View>
 
-                <View style={[styles.statusBadge, statusMeta.badgeStyle]}>
-                  <Text style={[styles.statusBadgeText, statusMeta.textStyle]}>
-                    {statusMeta.label}
-                  </Text>
+                <View style={styles.cardActions}>
+                  {getContent(item)?.normalized_word ? (
+                    <Pressable
+                      style={[
+                        styles.listenIconButton,
+                        speakingWordId === item.id &&
+                          styles.listenIconButtonActive,
+                      ]}
+                      onPress={() => speakWord(item)}
+                      disabled={speakingWordId === item.id}
+                      accessibilityLabel="Kelimeyi dinle"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name="volume-high"
+                        color={theme.colors.primary}
+                        size={15}
+                      />
+                    </Pressable>
+                  ) : null}
+
+                  <View style={[styles.statusBadge, statusMeta.badgeStyle]}>
+                    <Text style={[styles.statusBadgeText, statusMeta.textStyle]}>
+                      {statusMeta.label}
+                    </Text>
+                  </View>
                 </View>
               </Pressable>
             );
@@ -587,8 +635,23 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     lineHeight: 17,
   },
+  cardActions: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  listenIconButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: theme.colors.primarySurface,
+  },
+  listenIconButtonActive: {
+    opacity: 0.5,
+  },
   statusBadge: {
-    alignSelf: "flex-start",
+    alignSelf: "flex-end",
     borderRadius: 7,
     paddingHorizontal: 8,
     paddingVertical: 5,
