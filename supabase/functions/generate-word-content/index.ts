@@ -38,6 +38,7 @@ type UserWordRecord = {
   id: string;
   user_id: string;
   word_content_id: string;
+  ai_content_disabled: boolean | null;
   word_contents: WordContentRecord | WordContentRecord[] | null;
 };
 
@@ -107,6 +108,7 @@ Deno.serve(async (req) => {
         id,
         user_id,
         word_content_id,
+        ai_content_disabled,
         word_contents (
           id,
           display_word,
@@ -127,6 +129,13 @@ Deno.serve(async (req) => {
     }
 
     const typedUserWord = userWord as UserWordRecord;
+
+    if (typedUserWord.ai_content_disabled) {
+      return jsonResponse(
+        { error: "AI content is disabled for this word" },
+        403
+      );
+    }
 
     const content = Array.isArray(typedUserWord.word_contents)
       ? typedUserWord.word_contents[0]
