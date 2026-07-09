@@ -5,6 +5,7 @@ type GeneratedWordContent = {
   academic_definition: string;
   turkish_meaning: string;
   part_of_speech: string;
+  phonetic: string;
   toefl_example: string;
   toefl_example_tr: string;
   daily_life_example: string;
@@ -178,6 +179,7 @@ Deno.serve(async (req) => {
         academic_definition: cleanText(generatedContent.academic_definition),
         turkish_meaning: cleanText(generatedContent.turkish_meaning),
         part_of_speech: cleanText(generatedContent.part_of_speech),
+        phonetic: cleanText(generatedContent.phonetic),
         toefl_example: cleanText(generatedContent.toefl_example),
         toefl_example_tr: cleanText(generatedContent.toefl_example_tr),
         daily_life_example: cleanText(generatedContent.daily_life_example),
@@ -267,6 +269,7 @@ Requirements:
 - Keep definitions clear and useful.
 - Turkish meaning should be natural, short Turkish. Prefer 1-6 words when possible. Do not include English in parentheses.
 - part_of_speech should be the word's main grammatical role in this context. Use exactly one of: noun, verb, adjective, adverb, phrase, phrasal verb, preposition, conjunction, interjection, determiner, pronoun.
+- phonetic should be the standard IPA phonetic transcription of the word using General American English pronunciation, wrapped in forward slashes (e.g. /kəmˈpjuːtər/). Use accurate IPA symbols, not a simplified respelling.
 - TOEFL / IELTS example should be academic.
 - Daily life example should be natural spoken English.
 - Provide Turkish translations for both example sentences.
@@ -308,6 +311,7 @@ Requirements:
                   "pronoun",
                 ],
               },
+              phonetic: { type: "string" },
               toefl_example: { type: "string" },
               toefl_example_tr: { type: "string" },
               daily_life_example: { type: "string" },
@@ -353,6 +357,7 @@ Requirements:
               "academic_definition",
               "turkish_meaning",
               "part_of_speech",
+              "phonetic",
               "toefl_example",
               "toefl_example_tr",
               "daily_life_example",
