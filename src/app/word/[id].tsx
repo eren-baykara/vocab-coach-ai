@@ -47,6 +47,7 @@ type UserWordDetail = {
   created_at: string;
   next_review_at: string | null;
   last_reviewed_at: string | null;
+  ai_content_disabled: boolean | null;
   word_contents: WordContent | WordContent[] | null;
 };
 
@@ -70,6 +71,7 @@ const WORD_DETAIL_SELECT = `
   created_at,
   next_review_at,
   last_reviewed_at,
+  ai_content_disabled,
   word_contents (
     display_word,
     normalized_word,
@@ -176,7 +178,10 @@ export default function WordDetailScreen() {
 
   const content = getContent(wordDetail);
   const title = content?.display_word ?? content?.normalized_word ?? "Kelime detayı";
-  const aiReady = content ? hasAiContent(content) : false;
+  const aiContentDisabled = Boolean(wordDetail?.ai_content_disabled);
+  const aiReady = Boolean(
+    content && !aiContentDisabled && hasAiContent(content)
+  );
   const currentSets = useMemo(
     () => getSetsForThisWord(sets, wordSetItems),
     [sets, wordSetItems]
@@ -185,8 +190,8 @@ export default function WordDetailScreen() {
     () => getAvailableSetsForThisWord(sets, wordSetItems),
     [sets, wordSetItems]
   );
-  const relatedWords = getRelatedWords(content);
-  const examples = getExamples(content);
+  const relatedWords = getRelatedWords(content, aiContentDisabled);
+  const examples = getExamples(content, aiContentDisabled);
 
   async function addWordToSet(setId: string) {
     if (!id) return;
@@ -246,6 +251,14 @@ export default function WordDetailScreen() {
 
   async function generateAiLesson() {
     if (!id || !wordDetail) return;
+
+    if (wordDetail.ai_content_disabled) {
+      Alert.alert(
+        "AI içeriği kapalı",
+        "Bu kelime için AI içeriği kapatıldı. Bu kelimeyi çıkarıp tekrar eklerken AI'yı açabilirsin."
+      );
+      return;
+    }
 
     setGeneratingAi(true);
 
@@ -419,7 +432,9 @@ export default function WordDetailScreen() {
         <View style={styles.heroDecorOne} />
         <View style={styles.heroDecorTwo} />
 
-        <Text style={styles.partBadge}>{getPartLabel(content)}</Text>
+        <Text style={styles.partBadge}>
+          {getPartLabel(content, aiContentDisabled)}
+        </Text>
         <Text style={styles.wordTitle}>{title}</Text>
 
         <Text style={styles.pronunciationText}>
@@ -427,12 +442,24 @@ export default function WordDetailScreen() {
         </Text>
 
         <View style={styles.meaningBubble}>
-          <Text style={styles.primaryMeaning}>{getPrimaryMeaning(content)}</Text>
-          <Text style={styles.simpleMeaning}>{getShortDefinition(content)}</Text>
+          <Text style={styles.primaryMeaning}>
+            {getPrimaryMeaning(content, aiContentDisabled)}
+          </Text>
+          <Text style={styles.simpleMeaning}>
+            {getShortDefinition(content, aiContentDisabled)}
+          </Text>
         </View>
       </View>
 
-      {!aiReady ? (
+      {aiContentDisabled ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>AI içeriği kapalı</Text>
+          <Text style={styles.bodyText}>
+            Bu kelimeyi “Yazdığım gibi ekle” ile eklediğin için AI içeriği bu
+            kelime için otomatik oluşturulmuyor.
+          </Text>
+        </View>
+      ) : !aiReady ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>AI içeriği gerekli</Text>
           <Text style={styles.bodyText}>
@@ -632,7 +659,11 @@ function hasAiContent(content: WordContent) {
   );
 }
 
-function getPrimaryMeaning(content: WordContent) {
+function getPrimaryMeaning(content: WordContent, aiContentDisabled: boolean) {
+  if (aiContentDisabled) {
+    return "AI içeriği bu kelime için kapalı.";
+  }
+
   return (
     content.turkish_meaning ||
     content.simple_definition ||
@@ -640,26 +671,30 @@ function getPrimaryMeaning(content: WordContent) {
   );
 }
 
-function getShortDefinition(content: WordContent) {
+function getShortDefinition(content: WordContent, aiContentDisabled: boolean) {
+  if (aiContentDisabled) {
+    return "";
+  }
+
   return content.simple_definition || "Basit anlam henüz oluşturulmadı.";
 }
 
-function getExamples(content: WordContent | null) {
-    if (!content) {
-      return ["Örnek cümle henüz oluşturulmadı."];
-    }
-  
-    const examples = [content.daily_life_example, content.toefl_example].filter(
-      Boolean
-    ) as string[];
-  
-    if (examples.length > 0) return examples;
-  
-    return ["Örnek cümle henüz oluşturulmadı."];
+function getExamples(content: WordContent | null, aiContentDisabled: boolean) {
+  if (aiContentDisabled || !content) {
+    return [];
   }
-  
-function getRelatedWords(content: WordContent | null) {
-  if (!content) return [];
+
+  const examples = [content.daily_life_example, content.toefl_example].filter(
+    Boolean
+  ) as string[];
+
+  if (examples.length > 0) return examples;
+
+  return ["Örnek cümle henüz oluşturulmadı."];
+}
+
+function getRelatedWords(content: WordContent | null, aiContentDisabled: boolean) {
+  if (aiContentDisabled || !content) return [];
 
   return [
     ...(content.synonyms ?? []),
@@ -670,7 +705,11 @@ function getRelatedWords(content: WordContent | null) {
     .slice(0, 8);
 }
 
-function getPartLabel(content: WordContent) {
+function getPartLabel(content: WordContent, aiContentDisabled: boolean) {
+  if (aiContentDisabled) {
+    return "kelime";
+  }
+
   switch (normalizePartOfSpeech(content.part_of_speech)) {
     case "noun":
       return "isim · noun";
