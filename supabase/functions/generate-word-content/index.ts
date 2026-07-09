@@ -4,6 +4,7 @@ type GeneratedWordContent = {
   simple_definition: string;
   academic_definition: string;
   turkish_meaning: string;
+  part_of_speech: string;
   toefl_example: string;
   toefl_example_tr: string;
   daily_life_example: string;
@@ -167,6 +168,7 @@ Deno.serve(async (req) => {
         simple_definition: cleanText(generatedContent.simple_definition),
         academic_definition: cleanText(generatedContent.academic_definition),
         turkish_meaning: cleanText(generatedContent.turkish_meaning),
+        part_of_speech: cleanText(generatedContent.part_of_speech),
         toefl_example: cleanText(generatedContent.toefl_example),
         toefl_example_tr: cleanText(generatedContent.toefl_example_tr),
         daily_life_example: cleanText(generatedContent.daily_life_example),
@@ -255,6 +257,7 @@ async function generateWordContent({
 Requirements:
 - Keep definitions clear and useful.
 - Turkish meaning should be natural, short Turkish. Prefer 1-6 words when possible. Do not include English in parentheses.
+- part_of_speech should be the word's main grammatical role in this context. Use exactly one of: noun, verb, adjective, adverb, phrase, phrasal verb, preposition, conjunction, interjection, determiner, pronoun.
 - TOEFL / IELTS example should be academic.
 - Daily life example should be natural spoken English.
 - Provide Turkish translations for both example sentences.
@@ -280,6 +283,22 @@ Requirements:
               simple_definition: { type: "string" },
               academic_definition: { type: "string" },
               turkish_meaning: { type: "string" },
+              part_of_speech: {
+                type: "string",
+                enum: [
+                  "noun",
+                  "verb",
+                  "adjective",
+                  "adverb",
+                  "phrase",
+                  "phrasal verb",
+                  "preposition",
+                  "conjunction",
+                  "interjection",
+                  "determiner",
+                  "pronoun",
+                ],
+              },
               toefl_example: { type: "string" },
               toefl_example_tr: { type: "string" },
               daily_life_example: { type: "string" },
@@ -324,6 +343,7 @@ Requirements:
               "simple_definition",
               "academic_definition",
               "turkish_meaning",
+              "part_of_speech",
               "toefl_example",
               "toefl_example_tr",
               "daily_life_example",
