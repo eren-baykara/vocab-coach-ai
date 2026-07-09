@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 import { theme } from "../../theme";
 import { useWordCorrection } from "../../lib/word-correction-context";
+import { appAlert } from "../../lib/app-alert";
 import {
   addUserWord,
   scheduleWordCorrectionCheck,
@@ -166,7 +166,7 @@ export default function HomeScreen() {
     setWordsLoading(false);
 
     if (error) {
-      Alert.alert("Could not load words", error.message);
+      appAlert("Could not load words", error.message);
       return;
     }
 
@@ -185,7 +185,7 @@ export default function HomeScreen() {
 
     if (setsError) {
       setSetsLoading(false);
-      Alert.alert("Could not load sets", setsError.message);
+      appAlert("Could not load sets", setsError.message);
       return;
     }
 
@@ -196,7 +196,7 @@ export default function HomeScreen() {
     setSetsLoading(false);
 
     if (itemsError) {
-      Alert.alert("Could not load set words", itemsError.message);
+      appAlert("Could not load set words", itemsError.message);
       return;
     }
 
@@ -236,7 +236,7 @@ export default function HomeScreen() {
 
   async function handleSignUp() {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing information", "Please enter your email and password.");
+      appAlert("Missing information", "Please enter your email and password.");
       return;
     }
 
@@ -250,16 +250,16 @@ export default function HomeScreen() {
     setAuthLoading(false);
 
     if (error) {
-      Alert.alert("Sign up failed", error.message);
+      appAlert("Sign up failed", error.message);
       return;
     }
 
-    Alert.alert("Account created", "You can now start adding words.");
+    appAlert("Account created", "You can now start adding words.");
   }
 
   async function handleSignIn() {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing information", "Please enter your email and password.");
+      appAlert("Missing information", "Please enter your email and password.");
       return;
     }
 
@@ -273,7 +273,7 @@ export default function HomeScreen() {
     setAuthLoading(false);
 
     if (error) {
-      Alert.alert("Login failed", error.message);
+      appAlert("Login failed", error.message);
     }
   }
 
@@ -281,7 +281,7 @@ export default function HomeScreen() {
     const cleanWord = word.trim();
 
     if (!cleanWord) {
-      Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
+      appAlert("Kelime eksik", "Lütfen önce bir kelime yaz.");
       return;
     }
 
@@ -300,7 +300,7 @@ export default function HomeScreen() {
 
   async function addConfirmedWord(cleanWord: string, generateAiAfterAdd = false) {
     if (!cleanWord) {
-      Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
+      appAlert("Kelime eksik", "Lütfen önce bir kelime yaz.");
       return null;
     }
 

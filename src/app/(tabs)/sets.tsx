@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
 import { useWordCorrection } from "../../lib/word-correction-context";
+import { appAlert } from "../../lib/app-alert";
 import {
   addUserWord,
   scheduleWordCorrectionCheck,
@@ -148,17 +148,17 @@ export default function SetsScreen() {
     setSetsLoading(false);
 
     if (setsResult.error) {
-      Alert.alert("Setler yüklenemedi", setsResult.error.message);
+      appAlert("Setler yüklenemedi", setsResult.error.message);
       return;
     }
 
     if (itemsResult.error) {
-      Alert.alert("Set kelimeleri yüklenemedi", itemsResult.error.message);
+      appAlert("Set kelimeleri yüklenemedi", itemsResult.error.message);
       return;
     }
 
     if (wordsResult.error) {
-      Alert.alert("Kelimeler yüklenemedi", wordsResult.error.message);
+      appAlert("Kelimeler yüklenemedi", wordsResult.error.message);
       return;
     }
 
@@ -274,7 +274,7 @@ export default function SetsScreen() {
     const cleanName = newSetName.trim();
 
     if (!cleanName) {
-      Alert.alert("Set adı eksik", "Lütfen bir set adı gir.");
+      appAlert("Set adı eksik", "Lütfen bir set adı gir.");
       return;
     }
 
@@ -291,7 +291,7 @@ export default function SetsScreen() {
     setCreatingSet(false);
 
     if (error) {
-      Alert.alert("Set oluşturulamadı", error.message);
+      appAlert("Set oluşturulamadı", error.message);
       return;
     }
 
@@ -315,7 +315,7 @@ export default function SetsScreen() {
     const cleanName = editingSetName.trim();
 
     if (!cleanName) {
-      Alert.alert("Set adı eksik", "Set adı boş olamaz.");
+      appAlert("Set adı eksik", "Set adı boş olamaz.");
       return;
     }
 
@@ -331,7 +331,7 @@ export default function SetsScreen() {
     setSavingRenameId(null);
 
     if (error) {
-      Alert.alert("Set adı değiştirilemedi", error.message);
+      appAlert("Set adı değiştirilemedi", error.message);
       return;
     }
 
@@ -342,7 +342,7 @@ export default function SetsScreen() {
   function confirmDeleteSet(set: WordSet) {
     if (isAllWordsSet(set.id)) return;
 
-    Alert.alert(
+    appAlert(
       "Set silinsin mi?",
       `"${set.name}" silinecek. Kelimelerin Library içinde kalır.`,
       [
@@ -364,7 +364,7 @@ export default function SetsScreen() {
     setDeletingSetId(null);
 
     if (error) {
-      Alert.alert("Set silinemedi", error.message);
+      appAlert("Set silinemedi", error.message);
       return;
     }
 
@@ -388,7 +388,7 @@ export default function SetsScreen() {
     const cleanWord = addWordSearch.trim();
 
     if (!cleanWord) {
-      Alert.alert("Kelime eksik", "Bu sete eklemek için bir kelime yaz.");
+      appAlert("Kelime eksik", "Bu sete eklemek için bir kelime yaz.");
       return;
     }
 
@@ -439,7 +439,7 @@ export default function SetsScreen() {
     setSavingSetItem(false);
 
     if (error && error.code !== "23505") {
-      Alert.alert("Kelime eklenemedi", error.message);
+      appAlert("Kelime eklenemedi", error.message);
       return;
     }
 
@@ -450,7 +450,7 @@ export default function SetsScreen() {
   function confirmRemoveWordFromSet(word: UserWord) {
     if (!expandedSet) return;
 
-    Alert.alert(
+    appAlert(
       "Setten çıkarılsın mı?",
       `"${getDisplayWord(word)}", "${expandedSet.name}" setinden çıkarılacak. Kelime Library içinde kalır.`,
       [
@@ -478,7 +478,7 @@ export default function SetsScreen() {
     setSavingSetItem(false);
 
     if (error) {
-      Alert.alert("Kelime çıkarılamadı", error.message);
+      appAlert("Kelime çıkarılamadı", error.message);
       return;
     }
 

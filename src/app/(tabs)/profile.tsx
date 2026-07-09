@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
+import { appAlert } from "../../lib/app-alert";
 import { theme } from "../../theme";
 
 type ProfileWordRow = {
@@ -160,19 +160,19 @@ export default function ProfileScreen() {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      Alert.alert("Çıkış yapılamadı", error.message);
+      appAlert("Çıkış yapılamadı", error.message);
     }
   }
 
   function handleChangePassword() {
-    Alert.alert(
+    appAlert(
       "Şifre değiştirme",
       "Bu akışı bir sonraki auth paketinde Supabase ile bağlayacağız."
     );
   }
 
   function handleLanguageComingSoon(language: "tr" | "en") {
-    Alert.alert(
+    appAlert(
       "Dil tercihi",
       language === "tr"
         ? "Türkçe şu an aktif dil."
@@ -181,7 +181,7 @@ export default function ProfileScreen() {
   }
 
   function handleSettingComingSoon() {
-    Alert.alert(
+    appAlert(
       "Yakında",
       "Bu ayar henüz bir bildirim/ses sistemine bağlı değil. Aktif olduğunda burada değiştirebileceksin."
     );

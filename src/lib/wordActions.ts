@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+import { appAlert } from "./app-alert";
 
 import { supabase } from "./supabase";
 
@@ -86,7 +86,7 @@ export async function findUserWordByInput(inputWord: string) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    Alert.alert("Could not find word", error.message);
+    appAlert("Could not find word", error.message);
     return null;
   }
 
@@ -119,12 +119,12 @@ export async function addUserWord(
   });
 
   if (error) {
-    Alert.alert("Kelime eklenemedi", error.message);
+    appAlert("Kelime eklenemedi", error.message);
     return null;
   }
 
   if (!userWordId || typeof userWordId !== "string") {
-    Alert.alert("Kelime eklenemedi", "Kelime kaydedildi ama kimliği alınamadı.");
+    appAlert("Kelime eklenemedi", "Kelime kaydedildi ama kimliği alınamadı.");
     return null;
   }
 
@@ -139,7 +139,7 @@ export async function addUserWord(
       });
 
     if (setError && setError.code !== "23505") {
-      Alert.alert("Kelime eklendi ama sete eklenemedi", setError.message);
+      appAlert("Kelime eklendi ama sete eklenemedi", setError.message);
     }
   }
 
@@ -152,7 +152,7 @@ export async function addUserWord(
       })
       .then(async ({ error: aiError }) => {
         if (aiError) {
-          Alert.alert(
+          appAlert(
             "AI içeriği oluşturulamadı",
             await getFunctionErrorMessage(aiError)
           );
@@ -180,7 +180,7 @@ export async function replaceUserWord(
     .eq("id", userWordId);
 
   if (deleteError) {
-    Alert.alert("Kelime düzeltilemedi", deleteError.message);
+    appAlert("Kelime düzeltilemedi", deleteError.message);
     return null;
   }
 

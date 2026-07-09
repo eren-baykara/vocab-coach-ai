@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import * as Speech from "expo-speech";
 import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../../lib/supabase";
+import { appAlert } from "../../lib/app-alert";
 import { theme } from "../../theme";
 
 type WordContent = {
@@ -134,7 +134,7 @@ export default function WordDetailScreen() {
     setLoading(false);
 
     if (error) {
-      Alert.alert("Kelime yüklenemedi", error.message);
+      appAlert("Kelime yüklenemedi", error.message);
       return;
     }
 
@@ -156,7 +156,7 @@ export default function WordDetailScreen() {
 
     if (setsError) {
       setSetsLoading(false);
-      Alert.alert("Setler yüklenemedi", setsError.message);
+      appAlert("Setler yüklenemedi", setsError.message);
       return;
     }
 
@@ -168,7 +168,7 @@ export default function WordDetailScreen() {
     setSetsLoading(false);
 
     if (itemsError) {
-      Alert.alert("Kelimenin setleri yüklenemedi", itemsError.message);
+      appAlert("Kelimenin setleri yüklenemedi", itemsError.message);
       return;
     }
 
@@ -234,7 +234,7 @@ export default function WordDetailScreen() {
     setSavingSetChange(false);
 
     if (error && error.code !== "23505") {
-      Alert.alert("Sete eklenemedi", error.message);
+      appAlert("Sete eklenemedi", error.message);
       return;
     }
 
@@ -242,7 +242,7 @@ export default function WordDetailScreen() {
   }
 
   function confirmRemoveFromSet(set: WordSet) {
-    Alert.alert(
+    appAlert(
       "Setten çıkarılsın mı?",
       `"${set.name}" setinden çıkarılacak. Kelime Library içinde kalır.`,
       [
@@ -270,7 +270,7 @@ export default function WordDetailScreen() {
     setSavingSetChange(false);
 
     if (error) {
-      Alert.alert("Setten çıkarılamadı", error.message);
+      appAlert("Setten çıkarılamadı", error.message);
       return;
     }
 
@@ -289,7 +289,7 @@ export default function WordDetailScreen() {
 
     if (enableError) {
       setGeneratingAi(false);
-      Alert.alert("AI açılamadı", enableError.message);
+      appAlert("AI açılamadı", enableError.message);
       return;
     }
 
@@ -333,7 +333,7 @@ export default function WordDetailScreen() {
     if (lastError) {
       const detailedMessage = await getFunctionErrorMessage(lastError);
 
-      Alert.alert("AI içeriği oluşturulamadı", detailedMessage);
+      appAlert("AI içeriği oluşturulamadı", detailedMessage);
       await loadWordDetail();
       return;
     }
@@ -341,18 +341,18 @@ export default function WordDetailScreen() {
     await loadWordDetail();
 
     if (responseData?.cached) {
-      Alert.alert("Zaten hazır", "Bu kelime için AI içeriği daha önce oluşturulmuş.");
+      appAlert("Zaten hazır", "Bu kelime için AI içeriği daha önce oluşturulmuş.");
       return;
     }
 
-    Alert.alert("AI içeriği açıldı", "Kelime için AI içeriği oluşturuldu.");
+    appAlert("AI içeriği açıldı", "Kelime için AI içeriği oluşturuldu.");
   }
 
   async function generateAiLesson() {
     if (!id || !wordDetail) return;
 
     if (wordDetail.ai_content_disabled) {
-      Alert.alert(
+      appAlert(
         "AI içeriği kapalı",
         "Bu kelime için AI içeriği kapatıldı. Bu kelimeyi çıkarıp tekrar eklerken AI'yı açabilirsin."
       );
@@ -375,18 +375,18 @@ export default function WordDetailScreen() {
     if (error) {
       const detailedMessage = await getFunctionErrorMessage(error);
 
-      Alert.alert("AI içeriği oluşturulamadı", detailedMessage);
+      appAlert("AI içeriği oluşturulamadı", detailedMessage);
       return;
     }
 
     await loadWordDetail();
 
     if (data?.cached) {
-      Alert.alert("Zaten hazır", "Bu kelime için AI içeriği daha önce oluşturulmuş.");
+      appAlert("Zaten hazır", "Bu kelime için AI içeriği daha önce oluşturulmuş.");
       return;
     }
 
-    Alert.alert("AI içeriği hazır", "Kelime içeriği oluşturuldu.");
+    appAlert("AI içeriği hazır", "Kelime içeriği oluşturuldu.");
   }
 
   async function getFunctionErrorMessage(error: unknown) {
@@ -443,7 +443,7 @@ export default function WordDetailScreen() {
     setSavingNote(false);
 
     if (error) {
-      Alert.alert("Not kaydedilemedi", error.message);
+      appAlert("Not kaydedilemedi", error.message);
       return;
     }
 
@@ -452,11 +452,11 @@ export default function WordDetailScreen() {
     setWordDetail(typedData);
     setPersonalNote(typedData.personal_note ?? "");
 
-    Alert.alert("Kaydedildi", "Kişisel notun kaydedildi.");
+    appAlert("Kaydedildi", "Kişisel notun kaydedildi.");
   }
 
   function confirmRemoveWord() {
-    Alert.alert(
+    appAlert(
       "Kelime çıkarılsın mı?",
       "Bu işlem kelimeyi Library’den ve bağlı olduğu tüm setlerden çıkarır. AI içeriği veritabanında kalır.",
       [
@@ -480,7 +480,7 @@ export default function WordDetailScreen() {
     setDeleting(false);
 
     if (error) {
-      Alert.alert("Kelime çıkarılamadı", error.message);
+      appAlert("Kelime çıkarılamadı", error.message);
       return;
     }
 

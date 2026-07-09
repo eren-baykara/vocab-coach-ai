@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import * as Speech from "expo-speech";
 import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../lib/supabase";
+import { appAlert } from "../lib/app-alert";
 import { theme } from "../theme";
 
 type WordContent = {
@@ -96,7 +96,7 @@ export default function CardSortScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert("Kartlar yüklenemedi", error.message);
+      appAlert("Kartlar yüklenemedi", error.message);
       return;
     }
 
@@ -112,7 +112,7 @@ export default function CardSortScreen() {
 
       if (setItemsError) {
         setLoading(false);
-        Alert.alert("Set kelimeleri yüklenemedi", setItemsError.message);
+        appAlert("Set kelimeleri yüklenemedi", setItemsError.message);
         return;
       }
 
@@ -206,7 +206,7 @@ export default function CardSortScreen() {
     setSavingChoice(false);
 
     if (error) {
-      Alert.alert("Seçim kaydedilemedi", error.message);
+      appAlert("Seçim kaydedilemedi", error.message);
       return;
     }
 
@@ -242,7 +242,7 @@ export default function CardSortScreen() {
 
     if (setError) {
       setCreatingSet(false);
-      Alert.alert("Set oluşturulamadı", setError.message);
+      appAlert("Set oluşturulamadı", setError.message);
       return null;
     }
 
@@ -256,7 +256,7 @@ export default function CardSortScreen() {
     setCreatingSet(false);
 
     if (itemsError) {
-      Alert.alert("Set oluşturuldu ama kelimeler eklenemedi", itemsError.message);
+      appAlert("Set oluşturuldu ama kelimeler eklenemedi", itemsError.message);
       return null;
     }
 
@@ -268,7 +268,7 @@ export default function CardSortScreen() {
 
     if (!createdSet) return;
 
-    Alert.alert(
+    appAlert(
       "Set oluşturuldu",
       `"${createdSet.name}" setine ${learningWordIds.length} kelime eklendi.`
     );

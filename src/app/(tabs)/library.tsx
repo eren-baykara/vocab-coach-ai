@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
+import { appAlert } from "../../lib/app-alert";
 import { theme } from "../../theme";
 
 type WordContent = {
@@ -123,7 +123,7 @@ export default function LibraryScreen() {
     setWordsLoading(false);
 
     if (error) {
-      Alert.alert("Kelimeler yüklenemedi", error.message);
+      appAlert("Kelimeler yüklenemedi", error.message);
       return;
     }
 

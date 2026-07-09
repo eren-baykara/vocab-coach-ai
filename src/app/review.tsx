@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 import { Stack, router, useLocalSearchParams } from "expo-router";
 
 import { supabase } from "../lib/supabase";
+import { appAlert } from "../lib/app-alert";
 import { theme } from "../theme";
 
 type PracticeMode = "meaning" | "reverse" | "fill";
@@ -124,7 +124,7 @@ export default function ReviewScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert("Pratik yüklenemedi", error.message);
+      appAlert("Pratik yüklenemedi", error.message);
       return;
     }
 
@@ -140,7 +140,7 @@ export default function ReviewScreen() {
 
       if (setItemsError) {
         setLoading(false);
-        Alert.alert("Set pratiği yüklenemedi", setItemsError.message);
+        appAlert("Set pratiği yüklenemedi", setItemsError.message);
         return;
       }
 
@@ -191,7 +191,7 @@ export default function ReviewScreen() {
     setSavingResult(false);
 
     if (error) {
-      Alert.alert("Cevap kaydedilemedi", error.message);
+      appAlert("Cevap kaydedilemedi", error.message);
     }
   }
 
