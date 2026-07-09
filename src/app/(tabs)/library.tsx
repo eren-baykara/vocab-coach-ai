@@ -20,6 +20,7 @@ type WordContent = {
   normalized_word: string | null;
   simple_definition: string | null;
   turkish_meaning: string | null;
+  part_of_speech: string | null;
   mini_lesson: string | null;
 };
 
@@ -44,6 +45,7 @@ const LIBRARY_SELECT = `
     normalized_word,
     simple_definition,
     turkish_meaning,
+    part_of_speech,
     mini_lesson
   )
 `;
@@ -257,7 +259,7 @@ export default function LibraryScreen() {
               >
                 <View style={[styles.partBadge, statusMeta.partStyle]}>
                   <Text style={[styles.partBadgeText, statusMeta.partTextStyle]}>
-                    KLM
+                    {getPartAbbreviation(getContent(item)?.part_of_speech)}
                   </Text>
                 </View>
 
@@ -313,6 +315,39 @@ function getSecondaryText(item: UserWord) {
   const content = getContent(item);
 
   return content?.simple_definition ?? content?.mini_lesson ?? "";
+}
+
+function getPartAbbreviation(partOfSpeech: string | null | undefined) {
+  switch (normalizePartOfSpeech(partOfSpeech)) {
+    case "noun":
+      return "NOUN";
+    case "verb":
+      return "VERB";
+    case "adjective":
+      return "ADJ";
+    case "adverb":
+      return "ADV";
+    case "phrase":
+      return "PHR";
+    case "phrasal verb":
+      return "PHRV";
+    case "preposition":
+      return "PREP";
+    case "conjunction":
+      return "CONJ";
+    case "interjection":
+      return "INTJ";
+    case "determiner":
+      return "DET";
+    case "pronoun":
+      return "PRON";
+    default:
+      return "KLM";
+  }
+}
+
+function normalizePartOfSpeech(partOfSpeech: string | null | undefined) {
+  return partOfSpeech?.trim().toLowerCase() ?? "";
 }
 
 function getLearningState(item: UserWord): LearningState {

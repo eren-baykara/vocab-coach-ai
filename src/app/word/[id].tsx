@@ -20,6 +20,7 @@ type WordContent = {
   simple_definition: string | null;
   academic_definition: string | null;
   turkish_meaning: string | null;
+  part_of_speech: string | null;
   toefl_example: string | null;
   toefl_example_tr: string | null;
   daily_life_example: string | null;
@@ -75,6 +76,7 @@ const WORD_DETAIL_SELECT = `
     simple_definition,
     academic_definition,
     turkish_meaning,
+    part_of_speech,
     toefl_example,
     toefl_example_tr,
     daily_life_example,
@@ -669,9 +671,36 @@ function getRelatedWords(content: WordContent | null) {
 }
 
 function getPartLabel(content: WordContent) {
-  if (content.cefr_level) return content.cefr_level;
+  switch (normalizePartOfSpeech(content.part_of_speech)) {
+    case "noun":
+      return "isim · noun";
+    case "verb":
+      return "fiil · verb";
+    case "adjective":
+      return "sıfat · adjective";
+    case "adverb":
+      return "zarf · adverb";
+    case "phrase":
+      return "ifade · phrase";
+    case "phrasal verb":
+      return "phrasal verb";
+    case "preposition":
+      return "edat · preposition";
+    case "conjunction":
+      return "bağlaç · conjunction";
+    case "interjection":
+      return "ünlem · interjection";
+    case "determiner":
+      return "belirteç · determiner";
+    case "pronoun":
+      return "zamir · pronoun";
+    default:
+      return "kelime";
+  }
+}
 
-  return "sıfat · adjective";
+function normalizePartOfSpeech(partOfSpeech: string | null | undefined) {
+  return partOfSpeech?.trim().toLowerCase() ?? "";
 }
 
 function getSetsForThisWord(sets: WordSet[], wordSetItems: WordSetItem[]) {
