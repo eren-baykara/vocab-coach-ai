@@ -86,27 +86,7 @@ const REVIEW_SELECT = `
   )
 `;
 
-const FALLBACK_MEANINGS = [
-  "genellikle",
-  "nadiren",
-  "geliştirmek",
-  "karşılaştırmak",
-  "açıklamak",
-  "desteklemek",
-  "azalmak",
-  "artmak",
-];
-
-const FALLBACK_WORDS = [
-  "usually",
-  "improve",
-  "compare",
-  "support",
-  "explain",
-  "increase",
-  "reduce",
-  "develop",
-];
+const MIN_OPTIONS_TO_SHOW_QUESTION = 2;
 
 export default function ReviewScreen() {
   const params = useLocalSearchParams<{
@@ -241,6 +221,12 @@ export default function ReviewScreen() {
 
     return buildQuizQuestion(currentWord, allWords, practiceMode);
   }, [currentWord, allWords, practiceMode]);
+
+  useEffect(() => {
+    if (question && question.options.length < MIN_OPTIONS_TO_SHOW_QUESTION) {
+      goToNextQuestion();
+    }
+  }, [question]);
 
   const modeTitle = getModeTitle(practiceMode);
 
@@ -617,7 +603,7 @@ function buildMeaningQuestion(
     .filter((item) => isUsableShortChoice(item, 6, 48));
 
   const options = buildStableOptions(
-    [correctAnswer, ...aiDistractors, ...otherMeanings, ...FALLBACK_MEANINGS],
+    [correctAnswer, ...aiDistractors, ...otherMeanings],
     currentWord.id
   );
 
@@ -661,7 +647,7 @@ function buildReverseQuestion(
     .filter((item) => isUsableShortChoice(item, 4, 36));
 
   const options = buildStableOptions(
-    [correctAnswer, ...aiDistractors, ...otherWords, ...FALLBACK_WORDS],
+    [correctAnswer, ...aiDistractors, ...otherWords],
     currentWord.id
   );
 
@@ -697,7 +683,7 @@ function buildFillQuestion(
     .filter((item) => isUsableShortChoice(item, 4, 36));
 
   const options = buildStableOptions(
-    [correctAnswer, ...aiDistractors, ...otherWords, ...FALLBACK_WORDS],
+    [correctAnswer, ...aiDistractors, ...otherWords],
     currentWord.id
   );
 
