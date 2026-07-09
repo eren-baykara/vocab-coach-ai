@@ -411,16 +411,6 @@ export default function WordDetailScreen() {
         <Pressable style={styles.roundIconButton} onPress={() => router.back()}>
           <Text style={styles.roundIconText}>‹</Text>
         </Pressable>
-
-        <View style={styles.topActions}>
-          <View style={styles.roundIconButton}>
-            <Text style={styles.topActionText}>♬</Text>
-          </View>
-
-          <View style={styles.roundIconButton}>
-            <Text style={styles.topActionText}>♡</Text>
-          </View>
-        </View>
       </View>
 
       <View style={styles.heroCard}>
@@ -728,10 +718,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 24,
   },
-  topActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
   roundIconButton: {
     width: 38,
     height: 38,
@@ -744,11 +730,6 @@ const styles = StyleSheet.create({
     marginTop: -2,
     fontSize: 31,
     fontWeight: "500",
-    color: theme.colors.text,
-  },
-  topActionText: {
-    fontSize: 18,
-    fontWeight: "900",
     color: theme.colors.text,
   },
   heroCard: {
