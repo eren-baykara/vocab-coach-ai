@@ -58,47 +58,15 @@ type WordCorrectionSuggestion = {
   reason_tr: string;
 };
 
-const COMMON_WORD_SUGGESTIONS = [
-  "usually",
-  "usual",
-  "usage",
-  "use",
-  "useful",
-  "used to",
-  "analyze",
-  "approach",
-  "assume",
-  "benefit",
-  "challenge",
-  "compare",
-  "consider",
-  "consistent",
-  "context",
-  "define",
-  "develop",
-  "effective",
-  "evidence",
-  "expand",
-  "explain",
-  "focus",
-  "improve",
-  "include",
-  "increase",
-  "indicate",
-  "maintain",
-  "method",
-  "occur",
-  "process",
-  "provide",
-  "require",
-  "significant",
-  "similar",
-  "specific",
-  "structure",
-  "suggest",
-  "support",
-  "therefore",
-];
+type PendingWordCorrection = {
+  queueId: string;
+  userWordId: string;
+  originalWord: string;
+  suggestion: WordCorrectionSuggestion;
+  generateAiAfterAdd: boolean;
+  setId: string | null;
+  applying: boolean;
+};
 
 const VISIBLE_TAB_BAR_STYLE = {
   height: 82,
@@ -123,13 +91,11 @@ export default function HomeScreen() {
   const [setsLoading, setSetsLoading] = useState(false);
   const [addingWord, setAddingWord] = useState(false);
   const [addingWordWithAi, setAddingWordWithAi] = useState(false);
-  const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
 
   const [word, setWord] = useState("");
-  const [pendingCorrection, setPendingCorrection] =
-    useState<WordCorrectionSuggestion | null>(null);
-  const [pendingGenerateAiAfterAdd, setPendingGenerateAiAfterAdd] =
-    useState(false);
+  const [correctionQueue, setCorrectionQueue] = useState<
+    PendingWordCorrection[]
+  >([]);
 
   const [words, setWords] = useState<UserWord[]>([]);
   const [sets, setSets] = useState<WordSet[]>([]);
@@ -358,136 +324,50 @@ export default function HomeScreen() {
       return;
     }
 
-    setPendingCorrection(null);
-    setPendingGenerateAiAfterAdd(generateAiAfterAdd);
-    setCheckingWordCorrection(true);
+    setWord("");
 
-    const { data, error } = await supabase.functions.invoke(
-      "suggest-word-correction",
-      {
-        body: {
-          input_word: cleanWord,
-        },
-      }
-    );
-
-    setCheckingWordCorrection(false);
-
-    if (error) {
-      await addConfirmedWord(cleanWord, generateAiAfterAdd);
-      return;
-    }
-
-    const suggestion = data as WordCorrectionSuggestion | null;
-    const correctionOptions = suggestion
-      ? getCorrectionOptions(suggestion, cleanWord)
-      : [];
-
-    if (suggestion?.should_confirm && correctionOptions.length > 0) {
-      setPendingCorrection(suggestion);
-      return;
-    }
-
-    await addConfirmedWord(
-      suggestion?.primary_suggestion?.trim() || cleanWord,
-      generateAiAfterAdd
-    );
+    await addConfirmedWord(cleanWord, generateAiAfterAdd);
   }
 
-  async function confirmCorrectionSelection(
-    selectedWord: string,
-    disableAiContent = false
-  ) {
-    const cleanWord = selectedWord.trim();
-
-    if (!cleanWord) return;
-
-    const generateAiAfterAdd = disableAiContent
-      ? false
-      : pendingGenerateAiAfterAdd;
-
-    setPendingCorrection(null);
-    setPendingGenerateAiAfterAdd(false);
-    setWord(cleanWord);
-
-    await addConfirmedWord(cleanWord, generateAiAfterAdd, disableAiContent);
-  }
-
-  async function addConfirmedWord(
+  async function createUserWord(
     cleanWord: string,
-    generateAiAfterAdd = false,
-    disableAiContent = false
+    options: { generateAi?: boolean; setId?: string | null } = {}
   ) {
-    if (!cleanWord) {
-      Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
-      return;
-    }
-
-    if (generateAiAfterAdd && !disableAiContent) {
-      setAddingWordWithAi(true);
-    } else {
-      setAddingWord(true);
-    }
+    const { generateAi = false, setId = null } = options;
 
     const { error } = await supabase.rpc("add_user_word", {
       input_word: cleanWord,
     });
 
     if (error) {
-      setAddingWord(false);
-      setAddingWordWithAi(false);
-      setPendingGenerateAiAfterAdd(false);
       Alert.alert("Kelime eklenemedi", error.message);
-      return;
+      return null;
     }
 
     const targetWord = await findUserWordByInput(cleanWord);
 
     if (!targetWord) {
-      setAddingWord(false);
-      setAddingWordWithAi(false);
-      setPendingGenerateAiAfterAdd(false);
       Alert.alert(
         "Kelime eklendi",
         "Kelime Library'ye eklendi ama sonraki adım için bulunamadı."
       );
-      await refreshAll();
-      return;
+      return null;
     }
 
-    if (disableAiContent) {
-      const { error: disableAiError } = await supabase
-        .from("user_words")
-        .update({ ai_content_disabled: true })
-        .eq("id", targetWord.id);
-
-      if (disableAiError) {
-        setAddingWord(false);
-        setAddingWordWithAi(false);
-        setPendingGenerateAiAfterAdd(false);
-        Alert.alert("Kelime eklendi ama AI kapatılamadı", disableAiError.message);
-        return;
-      }
-    }
-
-    if (selectedSetId) {
+    if (setId) {
       const { error: setError } = await supabase
         .from("word_set_items")
         .insert({
-          set_id: selectedSetId,
+          set_id: setId,
           user_word_id: targetWord.id,
         });
 
       if (setError && setError.code !== "23505") {
-        setAddingWord(false);
-        setAddingWordWithAi(false);
-        setPendingGenerateAiAfterAdd(false);
         Alert.alert("Kelime eklendi ama sete eklenemedi", setError.message);
-        return;
       }
     }
 
-    if (generateAiAfterAdd) {
+    if (generateAi) {
       const { error: aiError } = await supabase.functions.invoke(
         "generate-word-content",
         {
@@ -498,23 +378,137 @@ export default function HomeScreen() {
       );
 
       if (aiError) {
-        setAddingWord(false);
-        setAddingWordWithAi(false);
-        setPendingGenerateAiAfterAdd(false);
         Alert.alert(
           "Kelime eklendi ama AI başarısız oldu",
           await getFunctionErrorMessage(aiError)
         );
-        await refreshAll();
-        return;
       }
     }
 
+    return targetWord;
+  }
+
+  async function addConfirmedWord(cleanWord: string, generateAiAfterAdd = false) {
+    if (!cleanWord) {
+      Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
+      return;
+    }
+
+    if (generateAiAfterAdd) {
+      setAddingWordWithAi(true);
+    } else {
+      setAddingWord(true);
+    }
+
+    const capturedSetId = selectedSetId;
+
+    const targetWord = await createUserWord(cleanWord, {
+      generateAi: generateAiAfterAdd,
+      setId: capturedSetId,
+    });
+
     setAddingWord(false);
     setAddingWordWithAi(false);
-    setPendingGenerateAiAfterAdd(false);
-    setWord("");
+
     await refreshAll();
+
+    if (targetWord) {
+      checkWordCorrectionInBackground(
+        targetWord.id,
+        cleanWord,
+        generateAiAfterAdd,
+        capturedSetId
+      );
+    }
+  }
+
+  async function checkWordCorrectionInBackground(
+    userWordId: string,
+    originalWord: string,
+    generateAiAfterAdd: boolean,
+    setId: string | null
+  ) {
+    const { data, error } = await supabase.functions.invoke(
+      "suggest-word-correction",
+      {
+        body: {
+          input_word: originalWord,
+        },
+      }
+    );
+
+    if (error) return;
+
+    const suggestion = data as WordCorrectionSuggestion | null;
+    const correctionOptions = suggestion
+      ? getCorrectionOptions(suggestion, originalWord)
+      : [];
+
+    if (!suggestion?.should_confirm || correctionOptions.length === 0) {
+      return;
+    }
+
+    setCorrectionQueue((current) => {
+      if (current.some((item) => item.userWordId === userWordId)) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          queueId: userWordId,
+          userWordId,
+          originalWord,
+          suggestion,
+          generateAiAfterAdd,
+          setId,
+          applying: false,
+        },
+      ];
+    });
+  }
+
+  async function applyWordCorrection(
+    item: PendingWordCorrection,
+    chosenWord: string
+  ) {
+    const cleanWord = chosenWord.trim();
+
+    if (!cleanWord) return;
+
+    setCorrectionQueue((current) =>
+      current.map((entry) =>
+        entry.queueId === item.queueId ? { ...entry, applying: true } : entry
+      )
+    );
+
+    const targetWord = await createUserWord(cleanWord, {
+      generateAi: item.generateAiAfterAdd,
+      setId: item.setId,
+    });
+
+    if (targetWord) {
+      const { error: deleteError } = await supabase
+        .from("user_words")
+        .delete()
+        .eq("id", item.userWordId);
+
+      if (deleteError) {
+        Alert.alert("Eski kelime kaldırılamadı", deleteError.message);
+      }
+    }
+
+    setCorrectionQueue((current) =>
+      current.filter((entry) => entry.queueId !== item.queueId)
+    );
+
+    await refreshAll();
+  }
+
+  function dismissWordCorrection(queueId: string) {
+    setCorrectionQueue((current) =>
+      current.filter((entry) => entry.queueId !== queueId)
+    );
   }
 
   function getCorrectionOptions(
@@ -745,8 +739,7 @@ export default function HomeScreen() {
           ? `No scheduled review in ${practiceScopeLabel} right now.`
           : `Practice today’s review words in ${practiceScopeLabel}.`;
 
-  const wordActionLoading =
-    addingWord || addingWordWithAi || checkingWordCorrection;
+  const wordActionLoading = addingWord || addingWordWithAi;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -757,11 +750,9 @@ export default function HomeScreen() {
       .map((item) => getDisplayWord(item))
       .filter(Boolean);
 
-    const combined = [...existingWords, ...COMMON_WORD_SUGGESTIONS];
-
     const uniqueSuggestions = Array.from(
       new Set(
-        combined
+        existingWords
           .map((item) => item.trim())
           .filter((item) => item.length > 0)
           .filter((item) => item.toLowerCase() !== cleanInput)
@@ -1239,16 +1230,13 @@ export default function HomeScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             value={word}
-            onChangeText={(value) => {
-              setWord(value);
-              setPendingCorrection(null);
-            }}
+            onChangeText={setWord}
             editable={!wordActionLoading}
             onSubmitEditing={() => handleAddWord(false)}
             returnKeyType="done"
           />
 
-          {wordSuggestions.length > 0 && !pendingCorrection ? (
+          {wordSuggestions.length > 0 ? (
             <View style={styles.todaySuggestionsWrap}>
               {wordSuggestions.map((suggestion) => (
                 <Pressable
@@ -1262,45 +1250,6 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {pendingCorrection ? (
-            <View style={styles.todayCorrectionCard}>
-              <Text style={styles.todayCorrectionTitle}>
-                Bunu mu demek istedin?
-              </Text>
-              <Text style={styles.todayCorrectionText}>
-                {pendingCorrection.reason_tr}
-              </Text>
-
-              <View style={styles.todayCorrectionOptions}>
-                {getCorrectionOptions(pendingCorrection, word).map((option) => (
-                  <Pressable
-                    key={option}
-                    style={styles.todayCorrectionChip}
-                    onPress={() => confirmCorrectionSelection(option)}
-                    disabled={wordActionLoading}
-                  >
-                    <Text style={styles.todayCorrectionChipText}>{option}</Text>
-                  </Pressable>
-                ))}
-
-                <Pressable
-                  style={styles.todayCorrectionOriginalChip}
-                  onPress={() =>
-                    confirmCorrectionSelection(
-                      pendingCorrection.original_word || word,
-                      true
-                    )
-                  }
-                  disabled={wordActionLoading}
-                >
-                  <Text style={styles.todayCorrectionOriginalText}>
-                    Yazdığım gibi ekle
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
           <View style={styles.todayQuickAddActions}>
             <Pressable
               style={[
@@ -1311,11 +1260,7 @@ export default function HomeScreen() {
               disabled={wordActionLoading}
             >
               <Text style={styles.todayQuickAddPrimaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWordWithAi
-                    ? "AI hazırlanıyor..."
-                    : "Ekle + AI Oluştur"}
+                {addingWordWithAi ? "AI hazırlanıyor..." : "Ekle + AI Oluştur"}
               </Text>
             </Pressable>
 
@@ -1328,15 +1273,55 @@ export default function HomeScreen() {
               disabled={wordActionLoading}
             >
               <Text style={styles.todayQuickAddSecondaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol..."
-                  : addingWord
-                    ? "Ekleniyor..."
-                    : "Sadece Ekle"}
+                {addingWord ? "Ekleniyor..." : "Sadece Ekle"}
               </Text>
             </Pressable>
           </View>
         </View>
+
+        {correctionQueue.length > 0 ? (
+          <View style={styles.correctionQueueSection}>
+            <Text style={styles.correctionQueueTitle}>Yazım önerileri</Text>
+
+            {correctionQueue.map((item) => (
+              <View key={item.queueId} style={styles.todayCorrectionCard}>
+                <Text style={styles.todayCorrectionTitle}>
+                  “{item.originalWord}” yerine bunu mu demek istedin?
+                </Text>
+                <Text style={styles.todayCorrectionText}>
+                  {item.suggestion.reason_tr}
+                </Text>
+
+                <View style={styles.todayCorrectionOptions}>
+                  {getCorrectionOptions(item.suggestion, item.originalWord).map(
+                    (option) => (
+                      <Pressable
+                        key={option}
+                        style={styles.todayCorrectionChip}
+                        onPress={() => applyWordCorrection(item, option)}
+                        disabled={item.applying}
+                      >
+                        <Text style={styles.todayCorrectionChipText}>
+                          {option}
+                        </Text>
+                      </Pressable>
+                    )
+                  )}
+
+                  <Pressable
+                    style={styles.todayCorrectionOriginalChip}
+                    onPress={() => dismissWordCorrection(item.queueId)}
+                    disabled={item.applying}
+                  >
+                    <Text style={styles.todayCorrectionOriginalText}>
+                      Yoksay
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
     </>
   );
@@ -2668,6 +2653,15 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 30,
     color: "#94a3b8",
+  },
+  correctionQueueSection: {
+    marginTop: theme.spacing.lg,
+  },
+  correctionQueueTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
   },
   todayCorrectionCard: {
     borderRadius: 16,
