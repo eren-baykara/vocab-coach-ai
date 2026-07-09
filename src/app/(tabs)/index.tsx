@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -106,6 +106,29 @@ export default function HomeScreen() {
       subscription.unsubscribe();
     };
   }, []);
+
+  const onboardingCheckedUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+
+    if (!userId || onboardingCheckedUserIdRef.current === userId) {
+      return;
+    }
+
+    onboardingCheckedUserIdRef.current = userId;
+
+    supabase
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) {
+          router.push("/onboarding");
+        }
+      });
+  }, [session]);
 
   const loadWords = useCallback(async () => {
     if (!session) return;
