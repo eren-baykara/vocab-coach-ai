@@ -266,7 +266,7 @@ export default function LibraryScreen() {
                 <View style={[styles.partBadge, statusMeta.partStyle]}>
                   <Text style={[styles.partBadgeText, statusMeta.partTextStyle]}>
                     {item.ai_content_disabled
-                      ? "KLM"
+                      ? "🔒"
                       : getPartAbbreviation(getContent(item)?.part_of_speech)}
                   </Text>
                 </View>
@@ -354,7 +354,7 @@ function getPartAbbreviation(partOfSpeech: string | null | undefined) {
     case "pronoun":
       return "PRON";
     default:
-      return "KLM";
+      return "—";
   }
 }
 

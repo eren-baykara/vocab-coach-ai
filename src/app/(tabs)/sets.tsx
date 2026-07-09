@@ -13,6 +13,12 @@ import { router, useFocusEffect } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
+import { useWordCorrection } from "../../lib/word-correction-context";
+import {
+  addUserWord,
+  getCorrectionOptions,
+  type WordCorrectionSuggestion,
+} from "../../lib/wordActions";
 import { theme } from "../../theme";
 
 type WordContent = {
@@ -89,6 +95,9 @@ export default function SetsScreen() {
   const [setSearchText, setSetSearchText] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<SetFilter>("all");
   const [showCreateBox, setShowCreateBox] = useState(false);
+  const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
+
+  const { queueCorrection, wordsChangeToken } = useWordCorrection();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -163,6 +172,12 @@ export default function SetsScreen() {
       }
     }, [session, loadSetsData])
   );
+
+  useEffect(() => {
+    if (session) {
+      loadSetsData();
+    }
+  }, [wordsChangeToken, session, loadSetsData]);
 
   const expandedSet = sets.find((set) => set.id === expandedSetId) ?? null;
   const expandedSetWords = expandedSet ? getWordsForSet(expandedSet.id) : [];
@@ -343,41 +358,58 @@ export default function SetsScreen() {
       return;
     }
 
+    setCheckingWordCorrection(true);
+
+    const { data, error } = await supabase.functions.invoke(
+      "suggest-word-correction",
+      {
+        body: {
+          input_word: cleanWord,
+        },
+      }
+    );
+
+    setCheckingWordCorrection(false);
+
+    if (error) {
+      await addWordToExpandedSetConfirmed(cleanWord);
+      return;
+    }
+
+    const suggestion = data as WordCorrectionSuggestion | null;
+    const correctionOptions = suggestion
+      ? getCorrectionOptions(suggestion, cleanWord)
+      : [];
+
+    if (suggestion?.should_confirm && correctionOptions.length > 0) {
+      setAddWordSearch("");
+
+      queueCorrection({
+        originalWord: cleanWord,
+        suggestion,
+        generateAiAfterAdd: true,
+        setId: expandedSetId,
+      });
+
+      return;
+    }
+
+    await addWordToExpandedSetConfirmed(cleanWord);
+  }
+
+  async function addWordToExpandedSetConfirmed(cleanWord: string) {
+    if (!expandedSetId) return;
+
     setSavingSetItem(true);
 
-    const { error: addWordError } = await supabase.rpc("add_user_word", {
-      input_word: cleanWord,
-    });
-
-    if (addWordError) {
-      setSavingSetItem(false);
-      Alert.alert("Kelime eklenemedi", addWordError.message);
-      return;
-    }
-
-    const targetWord = await findUserWordByInput(cleanWord);
-
-    if (!targetWord) {
-      setSavingSetItem(false);
-      Alert.alert(
-        "Kelime eklendi",
-        "Kelime Library'ye eklendi ama bu sete bağlanamadı."
-      );
-      await loadSetsData();
-      return;
-    }
-
-    const { error: setError } = await supabase.from("word_set_items").insert({
-      set_id: expandedSetId,
-      user_word_id: targetWord.id,
+    const targetWord = await addUserWord(cleanWord, {
+      generateAi: true,
+      setId: expandedSetId,
     });
 
     setSavingSetItem(false);
 
-    if (setError && setError.code !== "23505") {
-      Alert.alert("Kelime eklendi ama sete bağlanamadı", setError.message);
-      return;
-    }
+    if (!targetWord) return;
 
     setAddWordSearch("");
     await loadSetsData();
@@ -447,33 +479,6 @@ export default function SetsScreen() {
       pathname: "/word/[id]",
       params: { id: word.id },
     });
-  }
-
-  async function findUserWordByInput(inputWord: string) {
-    const normalizedInput = inputWord.trim().toLowerCase();
-
-    const { data, error } = await supabase
-      .from("user_words")
-      .select(WORD_SELECT)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      Alert.alert("Kelime bulunamadı", error.message);
-      return null;
-    }
-
-    const typedWords = (data ?? []) as UserWord[];
-
-    return (
-      typedWords.find((item) => {
-        const content = getContent(item);
-
-        const displayWord = content?.display_word?.trim().toLowerCase();
-        const normalizedWord = content?.normalized_word?.trim().toLowerCase();
-
-        return displayWord === normalizedInput || normalizedWord === normalizedInput;
-      }) ?? null
-    );
   }
 
   function getWordsForSet(setId: string) {
@@ -781,17 +786,25 @@ export default function SetsScreen() {
                         autoCapitalize="none"
                         value={addWordSearch}
                         onChangeText={setAddWordSearch}
-                        editable={!savingSetItem}
+                        editable={!savingSetItem && !checkingWordCorrection}
                         onSubmitEditing={handleAddWordToExpandedSet}
                       />
 
                       <Pressable
-                        style={[styles.primaryButton, savingSetItem && styles.disabledButton]}
+                        style={[
+                          styles.primaryButton,
+                          (savingSetItem || checkingWordCorrection) &&
+                            styles.disabledButton,
+                        ]}
                         onPress={handleAddWordToExpandedSet}
-                        disabled={savingSetItem}
+                        disabled={savingSetItem || checkingWordCorrection}
                       >
                         <Text style={styles.primaryButtonText}>
-                          {savingSetItem ? "Ekleniyor..." : "Sete ekle"}
+                          {checkingWordCorrection
+                            ? "Kontrol ediliyor..."
+                            : savingSetItem
+                              ? "Ekleniyor..."
+                              : "Sete ekle"}
                         </Text>
                       </Pressable>
 

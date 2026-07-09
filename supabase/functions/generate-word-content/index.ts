@@ -272,8 +272,8 @@ Requirements:
 - Provide Turkish translations for both example sentences.
 - fill_blank_sentence must be a natural English sentence that uses the exact target word or phrase. It will be used only in practice screens, not in the word detail page. It will be used only in practice screens, not in the word detail page.
 - fill_blank_answer should be the exact target word or phrase to fill in the sentence.
-- meaning_distractors should be 4 short Turkish wrong meanings. Do not include English translations or parentheses.
-- word_distractors should be 4 English wrong answer choices. Return only words or short phrases, no explanations.
+- meaning_distractors should be 4 short Turkish wrong meanings. They must NOT be synonyms or near-synonyms of the correct Turkish meaning, and must not be plausible alternate correct answers — a learner who knows the word should be able to rule them out confidently. Do not include English translations or parentheses.
+- word_distractors should be 4 English wrong answer choices for a "which word matches this meaning" quiz. They must be real, common English words of the same part of speech as the target word, but must NOT be synonyms, near-synonyms, or otherwise defensible as correct — only the target word should correctly match the meaning. Return only words or short phrases, no explanations.
 - Common mistake should warn about a real usage problem.
 - Mini lesson should teach how to use the word, not just memorize it.
 - CEFR level should be one of: A1, A2, B1, B2, C1, C2.

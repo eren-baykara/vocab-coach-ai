@@ -248,68 +248,6 @@ export default function HomeScreen() {
     }
   }
 
-  async function handleSignOut() {
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      Alert.alert("Sign out failed", error.message);
-    }
-  }
-
-  async function deleteSelectedSet() {
-    if (!selectedSet) return;
-
-    const { error } = await supabase
-      .from("word_sets")
-      .delete()
-      .eq("id", selectedSet.id);
-
-    if (error) {
-      Alert.alert("Could not delete set", error.message);
-      return;
-    }
-
-    setSelectedSetId(null);
-    await loadSets();
-  }
-
-  function confirmRemoveWordFromSelectedSet(item: UserWord) {
-    if (!selectedSet) return;
-
-    Alert.alert(
-      "Remove from set?",
-      `Remove "${getDisplayWord(item)}" from "${selectedSet.name}"? The word will stay in Library.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => removeWordFromSelectedSet(item),
-        },
-      ]
-    );
-  }
-
-  async function removeWordFromSelectedSet(item: UserWord) {
-    if (!selectedSet) return;
-
-    const { error } = await supabase
-      .from("word_set_items")
-      .delete()
-      .eq("set_id", selectedSet.id)
-      .eq("user_word_id", item.id);
-
-    if (error) {
-      Alert.alert("Could not remove word from set", error.message);
-      return;
-    }
-
-    await loadSets();
-  }
-
   async function handleAddWord(generateAiAfterAdd = false) {
     const cleanWord = word.trim();
 
@@ -740,6 +678,84 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <View style={styles.todayQuickAddCard}>
+          <View style={styles.todayQuickAddHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todayQuickAddEyebrow}>Hızlı Ekle</Text>
+              <Text style={styles.todayQuickAddTitle}>Yeni kelime ekle</Text>
+            </View>
+
+            <View style={styles.todayQuickAddScope}>
+              <Text style={styles.todayQuickAddScopeText} numberOfLines={1}>
+                {selectedSet ? selectedSet.name : "Kütüphane"}
+              </Text>
+            </View>
+          </View>
+
+          <TextInput
+            style={styles.todayQuickAddInput}
+            placeholder="Örn: usually"
+            placeholderTextColor={theme.colors.textSubtle}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={word}
+            onChangeText={setWord}
+            editable={!wordActionLoading}
+            onSubmitEditing={() => handleAddWord(false)}
+            returnKeyType="done"
+          />
+
+          {wordSuggestions.length > 0 ? (
+            <View style={styles.todaySuggestionsWrap}>
+              {wordSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion}
+                  style={styles.todaySuggestionChip}
+                  onPress={() => setWord(suggestion)}
+                >
+                  <Text style={styles.todaySuggestionText}>{suggestion}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.todayQuickAddActions}>
+            <Pressable
+              style={[
+                styles.todayQuickAddPrimary,
+                wordActionLoading && styles.todayPrimaryButtonDisabled,
+              ]}
+              onPress={() => handleAddWord(true)}
+              disabled={wordActionLoading}
+            >
+              <Text style={styles.todayQuickAddPrimaryText}>
+                {checkingWordCorrection
+                  ? "Kontrol ediliyor..."
+                  : addingWordWithAi
+                    ? "AI hazırlanıyor..."
+                    : "Ekle + AI Oluştur"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.todayQuickAddSecondary,
+                wordActionLoading && styles.todayPrimaryButtonDisabled,
+              ]}
+              onPress={() => handleAddWord(false)}
+              disabled={wordActionLoading}
+            >
+              <Text style={styles.todayQuickAddSecondaryText}>
+                {checkingWordCorrection
+                  ? "Kontrol ediliyor..."
+                  : addingWord
+                    ? "Ekleniyor..."
+                    : "Sadece Ekle"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={styles.todayGoalCard}>
           <View style={styles.todayGoalHeader}>
             <View style={{ flex: 1 }}>
@@ -983,84 +999,6 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
-
-        <View style={styles.todayQuickAddCard}>
-          <View style={styles.todayQuickAddHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.todayQuickAddEyebrow}>Hızlı Ekle</Text>
-              <Text style={styles.todayQuickAddTitle}>Yeni kelime ekle</Text>
-            </View>
-
-            <View style={styles.todayQuickAddScope}>
-              <Text style={styles.todayQuickAddScopeText} numberOfLines={1}>
-                {selectedSet ? selectedSet.name : "Kütüphane"}
-              </Text>
-            </View>
-          </View>
-
-          <TextInput
-            style={styles.todayQuickAddInput}
-            placeholder="Örn: usually"
-            placeholderTextColor={theme.colors.textSubtle}
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={word}
-            onChangeText={setWord}
-            editable={!wordActionLoading}
-            onSubmitEditing={() => handleAddWord(false)}
-            returnKeyType="done"
-          />
-
-          {wordSuggestions.length > 0 ? (
-            <View style={styles.todaySuggestionsWrap}>
-              {wordSuggestions.map((suggestion) => (
-                <Pressable
-                  key={suggestion}
-                  style={styles.todaySuggestionChip}
-                  onPress={() => setWord(suggestion)}
-                >
-                  <Text style={styles.todaySuggestionText}>{suggestion}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.todayQuickAddActions}>
-            <Pressable
-              style={[
-                styles.todayQuickAddPrimary,
-                wordActionLoading && styles.todayPrimaryButtonDisabled,
-              ]}
-              onPress={() => handleAddWord(true)}
-              disabled={wordActionLoading}
-            >
-              <Text style={styles.todayQuickAddPrimaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWordWithAi
-                    ? "AI hazırlanıyor..."
-                    : "Ekle + AI Oluştur"}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.todayQuickAddSecondary,
-                wordActionLoading && styles.todayPrimaryButtonDisabled,
-              ]}
-              onPress={() => handleAddWord(false)}
-              disabled={wordActionLoading}
-            >
-              <Text style={styles.todayQuickAddSecondaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWord
-                    ? "Ekleniyor..."
-                    : "Sadece Ekle"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
       </ScrollView>
     </>
   );
@@ -1097,82 +1035,6 @@ function getTodayLabel() {
   return `${days[today.getDay()]}, ${today.getDate()} ${
     months[today.getMonth()]
   }`;
-}
-
-
-function PracticeModeButton(props: any) {
-  const {
-    title,
-    subtitle,
-    meta,
-    count,
-    disabled,
-    loading,
-    onPress,
-  } = props;
-
-  const description = subtitle ?? meta ?? "";
-
-  return (
-    <Pressable
-      style={[
-        styles.practiceModeButton,
-        disabled && { opacity: 0.48 },
-      ]}
-      onPress={onPress}
-      disabled={disabled || loading}
-    >
-      <View style={{ flex: 1, paddingRight: 12 }}>
-        <Text
-          style={{
-            color: theme.colors.text,
-            fontSize: 16,
-            fontWeight: "900",
-            lineHeight: 22,
-          }}
-        >
-          {title}
-        </Text>
-
-        {description ? (
-          <Text
-            style={{
-              marginTop: 4,
-              color: theme.colors.textMuted,
-              fontSize: 13,
-              fontWeight: "700",
-              lineHeight: 18,
-            }}
-          >
-            {description}
-          </Text>
-        ) : null}
-      </View>
-
-      {typeof count === "number" ? (
-        <View
-          style={{
-            minWidth: 34,
-            height: 34,
-            borderRadius: 999,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: theme.colors.primarySurface,
-          }}
-        >
-          <Text
-            style={{
-              color: theme.colors.primary,
-              fontSize: 13,
-              fontWeight: "900",
-            }}
-          >
-            {count}
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
 }
 
 
@@ -1806,13 +1668,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 72,
-    paddingBottom: 32,
-    backgroundColor: "#f8fafc",
-  },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
@@ -1823,574 +1678,5 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: "#475569",
-  },
-  header: {
-    marginBottom: 18,
-    gap: 14,
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  setList: {
-    gap: 10,
-    paddingBottom: 12,
-  },
-  setChip: {
-    minWidth: 210,
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 18,
-    padding: 14,
-  },
-  activeSetChip: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
-  },
-  setChipTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 5,
-  },
-  activeSetChipTitle: {
-    color: "#ffffff",
-  },
-  setChipMeta: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "700",
-    color: "#64748b",
-  },
-  activeSetChipMeta: {
-    color: "#dbeafe",
-  },
-  setManagementHint: {
-    marginTop: 4,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    gap: 10,
-  },
-  setManagementHintText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#64748b",
-    fontWeight: "700",
-  },
-  setManagementHintButton: {
-    alignSelf: "flex-start",
-    backgroundColor: "#e0f2fe",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  setManagementHintButtonText: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#0369a1",
-  },
-  practiceCard: {
-    backgroundColor: "#2563eb",
-    borderRadius: 28,
-    padding: 22,
-    marginBottom: 20,
-  },
-  practiceEyebrow: {
-    color: "#bfdbfe",
-    fontSize: 13,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  practiceTitle: {
-    color: "#ffffff",
-    fontSize: 30,
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  practiceText: {
-    color: "#dbeafe",
-    fontSize: 16,
-    lineHeight: 23,
-    marginBottom: 16,
-  },
-  practiceStatsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 16,
-  },
-  practiceStatPill: {
-    flex: 1,
-    backgroundColor: "#1d4ed8",
-    borderRadius: 16,
-    padding: 14,
-  },
-  practiceStatNumber: {
-    color: "#ffffff",
-    fontSize: 24,
-    fontWeight: "900",
-    marginBottom: 2,
-  },
-  practiceStatLabel: {
-    color: "#bfdbfe",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  practiceButton: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  practiceButtonText: {
-    color: "#1d4ed8",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  modeList: {
-    gap: 10,
-  },
-  studyBlock: {
-    marginTop: 18,
-    marginBottom: 18,
-  },
-  studyLabel: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#1e40af",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
-    marginBottom: 10,
-  },
-  primaryStudyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14,
-    padding: 18,
-    borderRadius: 22,
-    backgroundColor: "#eff6ff",
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-  },
-  primaryStudyTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#1e3a8a",
-    marginBottom: 6,
-  },
-  primaryStudyDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#1e40af",
-    fontWeight: "700",
-  },
-  primaryStudyMeta: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#2563eb",
-  },
-  primaryStudyChevron: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#2563eb",
-  },
-  practiceModesHeading: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 10,
-  },
-  practiceModeButton: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  practiceModeTextWrap: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  practiceModeTitle: {
-    color: "#1d4ed8",
-    fontSize: 17,
-    fontWeight: "900",
-    marginBottom: 4,
-  },
-  practiceModeDescription: {
-    color: "#475569",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
-  },
-  practiceModeChevron: {
-    color: "#93c5fd",
-    fontSize: 30,
-    fontWeight: "700",
-  },
-  statsCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  statNumber: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: "#64748b",
-    fontWeight: "700",
-  },
-  statDivider: {
-    width: 1,
-    height: 44,
-    backgroundColor: "#e2e8f0",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#64748b",
-    lineHeight: 22,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 10,
-  },
-  helperText: {
-    fontSize: 15,
-    color: "#64748b",
-    lineHeight: 22,
-    marginBottom: 14,
-  },
-  quickAddCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-  },
-  quickAddHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 10,
-  },
-  quickAddTitleBlock: {
-    flex: 1,
-  },
-  quickAddEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  quickAddTitle: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: "900",
-    lineHeight: 28,
-  },
-  quickAddScopePill: {
-    maxWidth: "42%",
-    backgroundColor: "#eff6ff",
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  quickAddScopeLabel: {
-    color: "#64748b",
-    fontSize: 10,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  quickAddScopeValue: {
-    color: "#1d4ed8",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  quickAddSubtitle: {
-    color: "#64748b",
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 14,
-  },
-  quickAddInput: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    fontSize: 17,
-    color: "#0f172a",
-    marginBottom: 12,
-  },
-  quickAddActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 2,
-  },
-  quickAddPrimaryButton: {
-    flex: 1.4,
-    backgroundColor: "#2563eb",
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  quickAddPrimaryButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  quickAddSecondaryButton: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  quickAddSecondaryButtonText: {
-    color: "#334155",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  quickAddTip: {
-    color: "#94a3b8",
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: "#0f172a",
-    marginBottom: 12,
-  },
-  suggestionsWrap: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
-  },
-  suggestionsLabel: {
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: "900",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
-  },
-  suggestionList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  suggestionChip: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  suggestionText: {
-    color: "#1d4ed8",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  button: {
-    backgroundColor: "#2563eb",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: "#2563eb",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  secondaryButtonText: {
-    color: "#2563eb",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  signOutButton: {
-    alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: "#ef4444",
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  signOutButtonText: {
-    color: "#ef4444",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  wordsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  refreshText: {
-    color: "#2563eb",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 28,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  wordList: {
-    gap: 10,
-  },
-  wordItem: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 14,
-    backgroundColor: "#f8fafc",
-    overflow: "hidden",
-  },
-  wordOpenArea: {
-    padding: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  removeFromSetButton: {
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    paddingVertical: 12,
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-  },
-  removeFromSetButtonText: {
-    color: "#dc2626",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  wordMainContent: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  wordText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 10,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  statusBadge: {
-    backgroundColor: "#e0f2fe",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  statusBadgeText: {
-    color: "#0369a1",
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
-  aiBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  aiReadyBadge: {
-    backgroundColor: "#dcfce7",
-  },
-  aiMissingBadge: {
-    backgroundColor: "#fef3c7",
-  },
-  aiBadgeText: {
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
-  aiReadyBadgeText: {
-    color: "#166534",
-  },
-  aiMissingBadgeText: {
-    color: "#92400e",
-  },
-  chevron: {
-    fontSize: 30,
-    color: "#94a3b8",
   },
 });

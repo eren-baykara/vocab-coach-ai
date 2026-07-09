@@ -249,6 +249,77 @@ export default function WordDetailScreen() {
     await loadSetsForWord();
   }
 
+  async function reenableAiContent() {
+    if (!id) return;
+
+    setGeneratingAi(true);
+
+    const { error: enableError } = await supabase
+      .from("user_words")
+      .update({ ai_content_disabled: false })
+      .eq("id", id);
+
+    if (enableError) {
+      setGeneratingAi(false);
+      Alert.alert("AI açılamadı", enableError.message);
+      return;
+    }
+
+    // The row update above can briefly lag behind the read the edge function
+    // does, so retry a couple of times if it still sees the old disabled flag.
+    const maxAttempts = 3;
+    let lastError: unknown = null;
+    let responseData: { cached?: boolean } | null = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "generate-word-content",
+        {
+          body: {
+            user_word_id: id,
+          },
+        }
+      );
+
+      if (!error) {
+        responseData = data;
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+
+      const message = await getFunctionErrorMessage(error);
+
+      if (!message.toLowerCase().includes("disabled")) {
+        break;
+      }
+    }
+
+    setGeneratingAi(false);
+
+    if (lastError) {
+      const detailedMessage = await getFunctionErrorMessage(lastError);
+
+      Alert.alert("AI içeriği oluşturulamadı", detailedMessage);
+      await loadWordDetail();
+      return;
+    }
+
+    await loadWordDetail();
+
+    if (responseData?.cached) {
+      Alert.alert("Zaten hazır", "Bu kelime için AI içeriği daha önce oluşturulmuş.");
+      return;
+    }
+
+    Alert.alert("AI içeriği açıldı", "Kelime için AI içeriği oluşturuldu.");
+  }
+
   async function generateAiLesson() {
     if (!id || !wordDetail) return;
 
@@ -458,6 +529,16 @@ export default function WordDetailScreen() {
             Bu kelimeyi “Yazdığım gibi ekle” ile eklediğin için AI içeriği bu
             kelime için otomatik oluşturulmuyor.
           </Text>
+
+          <Pressable
+            style={[styles.primaryButton, generatingAi && styles.disabledButton]}
+            onPress={reenableAiContent}
+            disabled={generatingAi}
+          >
+            <Text style={styles.primaryButtonText}>
+              {generatingAi ? "Oluşturuluyor..." : "AI'yı bu kelime için aç"}
+            </Text>
+          </Pressable>
         </View>
       ) : !aiReady ? (
         <View style={styles.card}>

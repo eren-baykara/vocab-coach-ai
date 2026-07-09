@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -7,21 +7,154 @@ import {
   Text,
   View,
 } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "../../lib/supabase";
 import { theme } from "../../theme";
 
+type ProfileWordRow = {
+  created_at: string;
+  last_reviewed_at: string | null;
+  ai_content_disabled: boolean | null;
+  word_contents:
+    | {
+        turkish_meaning: string | null;
+        simple_definition: string | null;
+        mini_lesson: string | null;
+      }
+    | {
+        turkish_meaning: string | null;
+        simple_definition: string | null;
+        mini_lesson: string | null;
+      }[]
+    | null;
+};
+
+function toDateKey(isoDate: string) {
+  return new Date(isoDate).toDateString();
+}
+
+function computeStreakDays(activityDateKeys: Set<string>) {
+  if (activityDateKeys.size === 0) return 0;
+
+  const today = new Date();
+  const hasToday = activityDateKeys.has(today.toDateString());
+
+  // If nothing happened today yet, a streak can still be "alive" through
+  // yesterday — start counting from yesterday instead of breaking to 0.
+  const cursor = new Date(today);
+  if (!hasToday) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!activityDateKeys.has(cursor.toDateString())) return 0;
+  }
+
+  let streak = 0;
+  while (activityDateKeys.has(cursor.toDateString())) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
 export default function ProfileScreen() {
   const [session, setSession] = useState<Session | null>(null);
-  const [dailyReminder, setDailyReminder] = useState(true);
-  const [soundEffects, setSoundEffects] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [dailyReminder, setDailyReminder] = useState(false);
+  const [soundEffects, setSoundEffects] = useState(false);
+
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [totalWords, setTotalWords] = useState(0);
+  const [aiReadyPercent, setAiReadyPercent] = useState(0);
+  const [streakDays, setStreakDays] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      setAuthChecked(true);
     });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setAuthChecked(true);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (authChecked && !session) {
+      router.replace("/");
+    }
+  }, [authChecked, session]);
+
+  const loadStats = useCallback(async () => {
+    if (!session) return;
+
+    setStatsLoading(true);
+
+    const { data, error } = await supabase
+      .from("user_words")
+      .select(
+        "created_at, last_reviewed_at, ai_content_disabled, word_contents ( turkish_meaning, simple_definition, mini_lesson )"
+      );
+
+    setStatsLoading(false);
+
+    if (error || !data) {
+      return;
+    }
+
+    const rows = data as ProfileWordRow[];
+
+    setTotalWords(rows.length);
+
+    const aiReadyCount = rows.filter((row) => {
+      if (row.ai_content_disabled) return false;
+
+      const content = Array.isArray(row.word_contents)
+        ? row.word_contents[0]
+        : row.word_contents;
+
+      return Boolean(
+        content?.turkish_meaning ||
+          content?.simple_definition ||
+          content?.mini_lesson
+      );
+    }).length;
+
+    setAiReadyPercent(
+      rows.length > 0 ? Math.round((aiReadyCount / rows.length) * 100) : 0
+    );
+
+    const activityDateKeys = new Set<string>();
+
+    rows.forEach((row) => {
+      activityDateKeys.add(toDateKey(row.created_at));
+
+      if (row.last_reviewed_at) {
+        activityDateKeys.add(toDateKey(row.last_reviewed_at));
+      }
+    });
+
+    setStreakDays(computeStreakDays(activityDateKeys));
+  }, [session]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
 
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut();
@@ -42,9 +175,20 @@ export default function ProfileScreen() {
     Alert.alert(
       "Dil tercihi",
       language === "tr"
-        ? "Türkçe şu an aktif dil olarak tasarlanıyor."
-        : "English dil seçimini localization paketinde bağlayacağız."
+        ? "Türkçe şu an aktif dil."
+        : "İngilizce dil seçeneği henüz bağlı değil, yakında eklenecek."
     );
+  }
+
+  function handleSettingComingSoon() {
+    Alert.alert(
+      "Yakında",
+      "Bu ayar henüz bir bildirim/ses sistemine bağlı değil. Aktif olduğunda burada değiştirebileceksin."
+    );
+  }
+
+  if (!session) {
+    return <View style={styles.centeredContainer} />;
   }
 
   return (
@@ -67,22 +211,28 @@ export default function ProfileScreen() {
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>23</Text>
+            <Text style={styles.statNumber}>
+              {statsLoading ? "–" : streakDays}
+            </Text>
             <Text style={styles.statLabel}>🔥 Seri</Text>
           </View>
 
           <View style={styles.statDivider} />
 
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>1.240</Text>
+            <Text style={styles.statNumber}>
+              {statsLoading ? "–" : totalWords}
+            </Text>
             <Text style={styles.statLabel}>📚 Kelime</Text>
           </View>
 
           <View style={styles.statDivider} />
 
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>87%</Text>
-            <Text style={styles.statLabel}>🎯 Başarı</Text>
+            <Text style={styles.statNumber}>
+              {statsLoading ? "–" : `${aiReadyPercent}%`}
+            </Text>
+            <Text style={styles.statLabel}>🎯 AI Hazır</Text>
           </View>
         </View>
       </View>
@@ -103,22 +253,28 @@ export default function ProfileScreen() {
             onPress={() => handleLanguageComingSoon("en")}
           >
             <Text style={styles.languageButtonText}>🇬🇧 English</Text>
+            <Text style={styles.comingSoonTag}>Yakında</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardEyebrow}>Bildirimler</Text>
+        <Text style={styles.cardNote}>
+          Bu ayarlar henüz bir bildirim/ses sistemine bağlı değil, yakında
+          aktif olacak.
+        </Text>
 
         <View style={styles.settingRow}>
           <View>
             <Text style={styles.settingTitle}>Günlük hatırlatıcı</Text>
-            <Text style={styles.settingSubtitle}>Her gün saat 20:00</Text>
+            <Text style={styles.settingSubtitle}>Yakında · Her gün saat 20:00</Text>
           </View>
 
           <ToggleSwitch
             value={dailyReminder}
-            onValueChange={setDailyReminder}
+            onValueChange={() => handleSettingComingSoon()}
+            disabled
           />
         </View>
 
@@ -127,12 +283,13 @@ export default function ProfileScreen() {
         <View style={styles.settingRow}>
           <View>
             <Text style={styles.settingTitle}>Ses efektleri</Text>
-            <Text style={styles.settingSubtitle}>Doğru / yanlış sesleri</Text>
+            <Text style={styles.settingSubtitle}>Yakında · Doğru / yanlış sesleri</Text>
           </View>
 
           <ToggleSwitch
             value={soundEffects}
-            onValueChange={setSoundEffects}
+            onValueChange={() => handleSettingComingSoon()}
+            disabled
           />
         </View>
       </View>
@@ -156,6 +313,9 @@ export default function ProfileScreen() {
       <Text style={styles.footerText}>
         Kelimelik AI · Ezberleme. AI ile kullanmayı öğren.
       </Text>
+      <Text style={styles.footerVersion}>
+        Sürüm {Constants.expoConfig?.version ?? "1.0.0"}
+      </Text>
     </ScrollView>
   );
 }
@@ -164,13 +324,19 @@ export default function ProfileScreen() {
 function ToggleSwitch({
   value,
   onValueChange,
+  disabled = false,
 }: {
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
-      style={[styles.toggleTrack, value && styles.toggleTrackActive]}
+      style={[
+        styles.toggleTrack,
+        value && styles.toggleTrackActive,
+        disabled && styles.toggleTrackDisabled,
+      ]}
       onPress={() => onValueChange(!value)}
     >
       <View style={[styles.toggleThumb, value && styles.toggleThumbActive]} />
@@ -184,6 +350,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 64,
     paddingBottom: 34,
+    backgroundColor: theme.colors.background,
+  },
+  centeredContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing["2xl"],
     backgroundColor: theme.colors.background,
   },
   screenTitle: {
@@ -270,6 +443,13 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginBottom: 14,
   },
+  cardNote: {
+    color: theme.colors.textSubtle,
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 14,
+    marginTop: -6,
+  },
   languageRow: {
     flexDirection: "row",
     gap: 10,
@@ -292,6 +472,14 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 15,
     fontWeight: "900",
+  },
+  comingSoonTag: {
+    marginTop: 4,
+    fontSize: 10,
+    fontWeight: "900",
+    color: theme.colors.textSubtle,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   languageButtonActiveText: {
     color: theme.colors.primary,
@@ -352,6 +540,9 @@ const styles = StyleSheet.create({
   toggleTrackActive: {
     backgroundColor: theme.colors.primarySoft,
   },
+  toggleTrackDisabled: {
+    opacity: 0.6,
+  },
   toggleThumb: {
     width: 24,
     height: 24,
@@ -368,5 +559,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
     marginTop: 8,
+  },
+  footerVersion: {
+    color: theme.colors.textSubtle,
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 4,
   },
 });
