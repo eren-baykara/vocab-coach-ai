@@ -10,6 +10,14 @@ export type WordCorrectionSuggestion = {
   reason_tr: string;
 };
 
+export type PendingWordCorrection = {
+  originalWord: string;
+  suggestion: WordCorrectionSuggestion;
+  generateAiAfterAdd: boolean;
+  setId: string | null;
+  userWordId: string;
+};
+
 type BasicWordContent = {
   display_word: string | null;
   normalized_word: string | null;
@@ -155,6 +163,64 @@ export async function addUserWord(
   }
 
   return targetWord;
+}
+
+export async function replaceUserWord(
+  userWordId: string,
+  correctedWord: string,
+  options: {
+    generateAi?: boolean;
+    setId?: string | null;
+    onAiComplete?: () => void;
+  } = {}
+) {
+  const { error: deleteError } = await supabase
+    .from("user_words")
+    .delete()
+    .eq("id", userWordId);
+
+  if (deleteError) {
+    Alert.alert("Kelime düzeltilemedi", deleteError.message);
+    return null;
+  }
+
+  return addUserWord(correctedWord, options);
+}
+
+export function scheduleWordCorrectionCheck(
+  cleanWord: string,
+  userWordId: string,
+  options: {
+    generateAiAfterAdd: boolean;
+    setId: string | null;
+    onCorrectionNeeded: (correction: PendingWordCorrection) => void;
+  }
+) {
+  void supabase.functions
+    .invoke("suggest-word-correction", {
+      body: {
+        input_word: cleanWord,
+      },
+    })
+    .then(({ data, error }) => {
+      if (error) return;
+
+      const suggestion = data as WordCorrectionSuggestion | null;
+
+      if (!suggestion) return;
+
+      const correctionOptions = getCorrectionOptions(suggestion, cleanWord);
+
+      if (suggestion.should_confirm && correctionOptions.length > 0) {
+        options.onCorrectionNeeded({
+          originalWord: cleanWord,
+          suggestion,
+          generateAiAfterAdd: options.generateAiAfterAdd,
+          setId: options.setId,
+          userWordId,
+        });
+      }
+    });
 }
 
 export function getCorrectionOptions(

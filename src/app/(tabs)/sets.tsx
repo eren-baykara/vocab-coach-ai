@@ -16,8 +16,7 @@ import { supabase } from "../../lib/supabase";
 import { useWordCorrection } from "../../lib/word-correction-context";
 import {
   addUserWord,
-  getCorrectionOptions,
-  type WordCorrectionSuggestion,
+  scheduleWordCorrectionCheck,
 } from "../../lib/wordActions";
 import { theme } from "../../theme";
 
@@ -108,7 +107,6 @@ export default function SetsScreen() {
   const [setSearchText, setSetSearchText] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<SetFilter>("all");
   const [showCreateBox, setShowCreateBox] = useState(false);
-  const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
 
   const { queueCorrection, wordsChangeToken, notifyWordsChanged } =
     useWordCorrection();
@@ -394,43 +392,17 @@ export default function SetsScreen() {
       return;
     }
 
-    setCheckingWordCorrection(true);
+    setAddWordSearch("");
 
-    const { data, error } = await supabase.functions.invoke(
-      "suggest-word-correction",
-      {
-        body: {
-          input_word: cleanWord,
-        },
-      }
-    );
+    const targetWord = await addWordToExpandedSetConfirmed(cleanWord);
 
-    setCheckingWordCorrection(false);
+    if (!targetWord) return;
 
-    if (error) {
-      await addWordToExpandedSetConfirmed(cleanWord);
-      return;
-    }
-
-    const suggestion = data as WordCorrectionSuggestion | null;
-    const correctionOptions = suggestion
-      ? getCorrectionOptions(suggestion, cleanWord)
-      : [];
-
-    if (suggestion?.should_confirm && correctionOptions.length > 0) {
-      setAddWordSearch("");
-
-      queueCorrection({
-        originalWord: cleanWord,
-        suggestion,
-        generateAiAfterAdd: true,
-        setId: isAllWordsSet(expandedSetId) ? null : expandedSetId,
-      });
-
-      return;
-    }
-
-    await addWordToExpandedSetConfirmed(cleanWord);
+    scheduleWordCorrectionCheck(cleanWord, targetWord.id, {
+      generateAiAfterAdd: true,
+      setId: isAllWordsSet(expandedSetId) ? null : expandedSetId,
+      onCorrectionNeeded: queueCorrection,
+    });
   }
 
   async function addWordToExpandedSetConfirmed(cleanWord: string) {
@@ -446,11 +418,12 @@ export default function SetsScreen() {
 
     setSavingSetItem(false);
 
-    if (!targetWord) return;
+    if (!targetWord) return null;
 
-    setAddWordSearch("");
     notifyWordsChanged();
     await loadSetsData();
+
+    return targetWord;
   }
 
   async function addExistingWordToSet(wordId: string) {
@@ -869,26 +842,24 @@ export default function SetsScreen() {
                 autoCapitalize="none"
                 value={addWordSearch}
                 onChangeText={setAddWordSearch}
-                editable={!savingSetItem && !checkingWordCorrection}
+                editable={!savingSetItem}
                 onSubmitEditing={handleAddWordToExpandedSet}
               />
 
               <Pressable
                 style={[
                   styles.primaryButton,
-                  (savingSetItem || checkingWordCorrection) && styles.disabledButton,
+                  savingSetItem && styles.disabledButton,
                 ]}
                 onPress={handleAddWordToExpandedSet}
-                disabled={savingSetItem || checkingWordCorrection}
+                disabled={savingSetItem}
               >
                 <Text style={styles.primaryButtonText}>
-                  {checkingWordCorrection
-                    ? "Kontrol ediliyor..."
-                    : savingSetItem
-                      ? "Ekleniyor..."
-                      : isVirtual
-                        ? "Kelime ekle"
-                        : "Sete ekle"}
+                  {savingSetItem
+                    ? "Ekleniyor..."
+                    : isVirtual
+                      ? "Kelime ekle"
+                      : "Sete ekle"}
                 </Text>
               </Pressable>
 

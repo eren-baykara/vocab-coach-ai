@@ -8,20 +8,12 @@ import {
 } from "react";
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { supabase } from "./supabase";
 import {
-  addUserWord,
   getCorrectionOptions,
-  type WordCorrectionSuggestion,
+  replaceUserWord,
+  type PendingWordCorrection,
 } from "./wordActions";
 import { theme } from "../theme";
-
-export type PendingWordCorrection = {
-  originalWord: string;
-  suggestion: WordCorrectionSuggestion;
-  generateAiAfterAdd: boolean;
-  setId: string | null;
-};
 
 type WordCorrectionContextValue = {
   wordsChangeToken: number;
@@ -72,7 +64,7 @@ export function WordCorrectionProvider({
 
     setApplyingCorrection(true);
 
-    await addUserWord(cleanWord, {
+    await replaceUserWord(pendingCorrection.userWordId, cleanWord, {
       generateAi: pendingCorrection.generateAiAfterAdd,
       setId: pendingCorrection.setId,
       onAiComplete: bumpWordsChangeToken,
@@ -83,33 +75,10 @@ export function WordCorrectionProvider({
     bumpWordsChangeToken();
   }
 
-  async function keepOriginalWordWithoutAi() {
-    if (!pendingCorrection) return;
+  function keepOriginalWord() {
+    if (!pendingCorrection || applyingCorrection) return;
 
-    setApplyingCorrection(true);
-
-    const targetWord = await addUserWord(pendingCorrection.originalWord, {
-      generateAi: false,
-      setId: pendingCorrection.setId,
-    });
-
-    if (targetWord) {
-      const { error: disableAiError } = await supabase
-        .from("user_words")
-        .update({ ai_content_disabled: true })
-        .eq("id", targetWord.id);
-
-      if (disableAiError) {
-        Alert.alert(
-          "Kelime eklendi ama AI kapatılamadı",
-          disableAiError.message
-        );
-      }
-    }
-
-    setApplyingCorrection(false);
     setPendingCorrection(null);
-    bumpWordsChangeToken();
   }
 
   function cancelPendingCorrection() {
@@ -141,8 +110,8 @@ export function WordCorrectionProvider({
           <View style={styles.card}>
             <Text style={styles.eyebrow}>Yazım önerisi</Text>
             <Text style={styles.title}>
-              “{pendingCorrection?.originalWord}” yerine bunu mu demek
-              istedin?
+              Az önce eklediğin “{pendingCorrection?.originalWord}” kelimesinde
+              yazım hatası olabilir.
             </Text>
 
             {pendingCorrection?.suggestion.reason_tr ? (
@@ -150,6 +119,8 @@ export function WordCorrectionProvider({
                 {pendingCorrection.suggestion.reason_tr}
               </Text>
             ) : null}
+
+            <Text style={styles.prompt}>Bunu mu demek istedin?</Text>
 
             <View style={styles.options}>
               {pendingCorrection
@@ -163,7 +134,9 @@ export function WordCorrectionProvider({
                       onPress={() => applyCorrectionSuggestion(option)}
                       disabled={applyingCorrection}
                     >
-                      <Text style={styles.chipText}>{option}</Text>
+                      <Text style={styles.chipText}>
+                        {applyingCorrection ? "Düzeltiliyor..." : option}
+                      </Text>
                     </Pressable>
                   ))
                 : null}
@@ -174,13 +147,11 @@ export function WordCorrectionProvider({
                 styles.asTypedButton,
                 applyingCorrection && styles.disabledButton,
               ]}
-              onPress={keepOriginalWordWithoutAi}
+              onPress={keepOriginalWord}
               disabled={applyingCorrection}
             >
               <Text style={styles.asTypedText}>
-                {applyingCorrection
-                  ? "Ekleniyor..."
-                  : `"${pendingCorrection?.originalWord ?? ""}" yazdığım gibi ekle (AI'sız)`}
+                {`"${pendingCorrection?.originalWord ?? ""}" yazdığım gibi kalsın`}
               </Text>
             </Pressable>
 
@@ -189,7 +160,7 @@ export function WordCorrectionProvider({
               onPress={cancelPendingCorrection}
               disabled={applyingCorrection}
             >
-              <Text style={styles.cancelText}>Vazgeç</Text>
+              <Text style={styles.cancelText}>Kapat</Text>
             </Pressable>
           </View>
         </View>
@@ -235,7 +206,13 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: "700",
     color: theme.colors.textMuted,
-    marginBottom: 16,
+    marginBottom: 10,
+  },
+  prompt: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: theme.colors.text,
+    marginBottom: 12,
   },
   options: {
     flexDirection: "row",

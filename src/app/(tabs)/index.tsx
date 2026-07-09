@@ -19,8 +19,7 @@ import { theme } from "../../theme";
 import { useWordCorrection } from "../../lib/word-correction-context";
 import {
   addUserWord,
-  getCorrectionOptions,
-  type WordCorrectionSuggestion,
+  scheduleWordCorrectionCheck,
 } from "../../lib/wordActions";
 
 type WordContent = {
@@ -79,7 +78,6 @@ export default function HomeScreen() {
   const [setsLoading, setSetsLoading] = useState(false);
   const [addingWord, setAddingWord] = useState(false);
   const [addingWordWithAi, setAddingWordWithAi] = useState(false);
-  const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
 
   const { wordsChangeToken, queueCorrection, notifyWordsChanged } =
     useWordCorrection();
@@ -287,55 +285,23 @@ export default function HomeScreen() {
       return;
     }
 
-    if (shouldSkipCorrectionCheck(cleanWord)) {
-      setWord("");
-      await addConfirmedWord(cleanWord, generateAiAfterAdd);
-      return;
-    }
-
-    setCheckingWordCorrection(true);
-
-    const { data, error } = await supabase.functions.invoke(
-      "suggest-word-correction",
-      {
-        body: {
-          input_word: cleanWord,
-        },
-      }
-    );
-
-    setCheckingWordCorrection(false);
-
-    if (error) {
-      setWord("");
-      await addConfirmedWord(cleanWord, generateAiAfterAdd);
-      return;
-    }
-
-    const suggestion = data as WordCorrectionSuggestion | null;
-    const correctionOptions = suggestion
-      ? getCorrectionOptions(suggestion, cleanWord)
-      : [];
-
     setWord("");
 
-    if (suggestion?.should_confirm && correctionOptions.length > 0) {
-      queueCorrection({
-        originalWord: cleanWord,
-        suggestion,
-        generateAiAfterAdd,
-        setId: quickAddSetId,
-      });
-      return;
-    }
+    const targetWord = await addConfirmedWord(cleanWord, generateAiAfterAdd);
 
-    await addConfirmedWord(cleanWord, generateAiAfterAdd);
+    if (!targetWord) return;
+
+    scheduleWordCorrectionCheck(cleanWord, targetWord.id, {
+      generateAiAfterAdd,
+      setId: quickAddSetId,
+      onCorrectionNeeded: queueCorrection,
+    });
   }
 
   async function addConfirmedWord(cleanWord: string, generateAiAfterAdd = false) {
     if (!cleanWord) {
       Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
-      return;
+      return null;
     }
 
     if (generateAiAfterAdd) {
@@ -344,7 +310,7 @@ export default function HomeScreen() {
       setAddingWord(true);
     }
 
-    await addUserWord(cleanWord, {
+    const targetWord = await addUserWord(cleanWord, {
       generateAi: generateAiAfterAdd,
       setId: quickAddSetId,
       onAiComplete: notifyWordsChanged,
@@ -353,8 +319,12 @@ export default function HomeScreen() {
     setAddingWord(false);
     setAddingWordWithAi(false);
 
+    if (!targetWord) return null;
+
     await refreshAll();
     notifyWordsChanged();
+
+    return targetWord;
   }
 
   function getContent(item: UserWord) {
@@ -473,8 +443,7 @@ export default function HomeScreen() {
   ).length;
   const dueCount = visibleWords.filter((item) => hasAiContent(item) && isDue(item)).length;
 
-  const wordActionLoading =
-    addingWord || addingWordWithAi || checkingWordCorrection;
+  const wordActionLoading = addingWord || addingWordWithAi;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -984,11 +953,7 @@ export default function HomeScreen() {
               disabled={wordActionLoading}
             >
               <Text style={styles.todayQuickAddPrimaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWordWithAi
-                    ? "AI hazırlanıyor..."
-                    : "Ekle + AI Oluştur"}
+                {addingWordWithAi ? "Ekleniyor..." : "Ekle + AI Oluştur"}
               </Text>
             </Pressable>
 
@@ -1001,11 +966,7 @@ export default function HomeScreen() {
               disabled={wordActionLoading}
             >
               <Text style={styles.todayQuickAddSecondaryText}>
-                {checkingWordCorrection
-                  ? "Kontrol ediliyor..."
-                  : addingWord
-                    ? "Ekleniyor..."
-                    : "Sadece Ekle"}
+                {addingWord ? "Ekleniyor..." : "Sadece Ekle"}
               </Text>
             </Pressable>
           </View>
@@ -1013,17 +974,6 @@ export default function HomeScreen() {
       </ScrollView>
     </>
   );
-}
-
-function shouldSkipCorrectionCheck(word: string) {
-  const clean = word.trim();
-
-  if (clean.length < 2) return false;
-  if (!/^[A-Za-z][A-Za-z' -]*$/.test(clean)) return false;
-  if (/\d/.test(clean)) return false;
-  if (/(.)\1{2,}/.test(clean)) return false;
-
-  return true;
 }
 
 function getTodayLabel() {
