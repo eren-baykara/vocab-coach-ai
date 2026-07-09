@@ -1,127 +1,106 @@
 # Kelimelik AI
 
-AI destekli İngilizce kelime öğrenme uygulaması. Kelimeleri ezberlemek yerine anlam, örnek cümle ve pratik modlarıyla kullanmayı öğretir.
+> Ezberleme. AI ile kullanmayı öğren.
 
-**Canlı demo:** https://eren-baykara.github.io/vocab-coach-ai/
+Türkçe konuşan öğrenciler için AI destekli İngilizce kelime uygulaması. TOEFL, IELTS ve günlük İngilizce için kelime ekler, anlam üretir ve tekrar pratiği sunar.
 
-## Özellikler
+**Canlı demo (paylaşılacak link):** https://eren-baykara.github.io/vocab-coach-ai/
 
-- **Hızlı kelime ekleme** — Kelime anında kütüphaneye eklenir; AI içerik ve yazım kontrolü arka planda çalışır
-- **AI kelime kartları** — Türkçe anlam, tanım, fonetik, TOEFL/günlük örnekler, mini ders, eş/anlamdaşlar
-- **Yazım düzeltme** — Yazım hatası şüphesi varsa eklemeden sonra popup ile öneri sunar
-- **Çalışma setleri** — TOEFL, akademik veya günlük konuşma gibi odaklı setler; varsayılan **Tüm Kelimeler** görünümü
-- **Pratik modları**
-  - Anlam quizi
-  - Ters quiz (Türkçe → İngilizce)
-  - Boşluk doldurma
-  - Kart sıralama (çalışma oturumu)
-- **Kelime detayı** — Dinle (TTS), kişisel not, set yönetimi, AI içerik yenileme
-- **Onboarding** — Sınav hedefi (TOEFL / IELTS / Genel), İngilizce seviyesi, günlük süre
-- **PWA + Safari uyumu** — GitHub Pages üzerinde web/PWA; iOS Safari için özel alert ve modal desteği
+---
 
-## Teknoloji
+## Neden Kelimelik AI?
 
-| Katman | Stack |
-|--------|--------|
-| Uygulama | [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/), React Native, Expo Router |
-| Backend | [Supabase](https://supabase.com/) — Auth, Postgres, RLS, Edge Functions |
-| AI | OpenAI (`generate-word-content`, `suggest-word-correction`) |
-| Deploy | GitHub Actions → GitHub Pages |
+- Kelimeyi yaz → anında listeye düşer, AI içerik arka planda hazırlanır
+- Yazım hatası varsa sonradan öneri popup’ı gelir
+- Set bazlı çalışma: TOEFL, akademik, günlük konuşma
+- Anlam, ters quiz, boşluk doldurma ve kart sıralama modları
+- Fonetik, TTS dinleme, kişisel not, kelime detay sayfası
+- Web + PWA; iOS Safari uyumlu
 
-## Proje yapısı
+## Öne çıkan özellikler
 
-```
-src/
-  app/                  # Expo Router ekranları
-    (tabs)/             # Bugün, Setler, Kelimeler, Profil
-    word/[id].tsx       # Kelime detayı
-    review.tsx          # Quiz modları
-    card-sort.tsx       # Kart sıralama
-    onboarding.tsx      # İlk kurulum
-  lib/
-    supabase.ts         # Supabase client
-    wordActions.ts      # Kelime ekleme / düzeltme
-    word-correction-context.tsx
-    app-alert.tsx       # Web uyumlu alert/confirm
-supabase/
-  migrations/           # Veritabanı şeması
-  functions/            # Edge Functions (AI)
-.github/workflows/      # GitHub Pages deploy
-```
+| Özellik | Açıklama |
+|---------|----------|
+| AI kelime kartı | Türkçe anlam, tanım, örnek cümleler, mini ders |
+| Akıllı yazım kontrolü | `innovatice` → `innovative` gibi düzeltme önerileri |
+| Çalışma setleri | Özel setler + varsayılan **Tüm Kelimeler** |
+| Tekrar sistemi | Bugün ekranında due/tekrar sayacı |
+| Onboarding | Sınav hedefi, CEFR seviyesi, günlük süre |
 
-## Geliştirme
+## Teknoloji (özet)
 
-### Gereksinimler
+Expo · React Native · Supabase · OpenAI Edge Functions · GitHub Pages
 
-- Node.js 22+
-- npm
-- Supabase projesi (Auth + Postgres + Edge Functions)
-- OpenAI API anahtarı (Edge Function secrets)
+Detaylı mimari ve kaynak kod **özel depoda** tutulur; bu README ürün tanıtımı ve sahip notları içindir.
 
-### Kurulum
+---
+
+## Pazarlama için paylaş
+
+Portfolio, LinkedIn veya CV’de şunları kullan:
+
+- **Demo:** https://eren-baykara.github.io/vocab-coach-ai/
+- **Kısa açıklama:** *AI destekli İngilizce kelime uygulaması — kelime ekle, AI anlam üretsin, setlerle çalış, quiz modlarıyla tekrar et.*
+- **Repo linki paylaşma** — depo private olduğunda dışarıdan görünmez; sadece demo URL’si yeterli.
+
+Ekran görüntüsü veya kısa video eklemen dönüşümü artırır.
+
+---
+
+## Gizlilik ve koruma
+
+| Ne | Durum |
+|----|--------|
+| GitHub kaynak kodu | **Private** — klonlanamaz, dosyalar görünmez |
+| Canlı uygulama (Pages) | **Public** — demo herkese açık (pazarlama için) |
+| OpenAI / service role anahtarları | Sunucuda; repoda yok |
+| Kullanıcı verileri | Supabase Auth + RLS |
+
+**Önemli:** Web uygulaması tarayıcıya indirilen JS bundle içerir. Tam kaynak gizli olsa da, deneyimli biri arayüzü inceleyebilir. Asıl korunan kısım: repo, migration’lar, Edge Function’lar ve API secret’ları.
+
+### Repoyu private yapmak uygulamayı bozar mı?
+
+**Hayır.** Private yapınca:
+
+- Canlı site açılmaya devam eder
+- GitHub Actions deploy çalışır
+- Push sonrası güncelleme yayınlanır
+- Kullanıcılar giriş yapıp kelime eklemeye devam eder
+
+Sadece GitHub’daki **kaynak kodu** dışarıdan görünmez olur.
+
+**Manuel adım (sen yapmalısın):**
+
+1. https://github.com/eren-baykara/vocab-coach-ai/settings
+2. En altta **Danger Zone → Change repository visibility**
+3. **Make private** seç → onayla
+
+---
+
+## Geliştirici notları *(yalnızca repo erişimi olanlar)*
 
 ```bash
-git clone https://github.com/eren-baykara/vocab-coach-ai.git
-cd vocab-coach-ai
 npm install
+npm start        # geliştirme
+npm run web      # web
+npm run export:web
 ```
 
-Proje kökünde `.env` oluştur:
+Ortam değişkenleri (`.env`):
 
 ```env
-EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 ```
 
-### Çalıştırma
+Actions secret’ları: aynı iki değişken + Supabase Edge’de `OPENAI_API_KEY`.
 
-```bash
-npm start          # Expo dev server
-npm run web        # Sadece web
-npm run export:web # Statik web export (GitHub Pages ile aynı çıktı)
-```
+Deploy: `master`/`main` push → `.github/workflows/deploy-pages.yml`
 
-### Supabase
+---
 
-1. Migration'ları uygula:
+## Telif
 
-   ```bash
-   supabase db push
-   ```
+© Eren Baykara. Tüm hakları saklıdır.
 
-2. Edge function secret'larını ayarla:
-
-   - `OPENAI_API_KEY`
-   - `OPENAI_MODEL` (opsiyonel, varsayılan: `gpt-5-mini`)
-
-3. Function'ları deploy et:
-
-   ```bash
-   supabase functions deploy generate-word-content
-   supabase functions deploy suggest-word-correction
-   ```
-
-## GitHub Pages deploy
-
-`master` veya `main` branch'e push edildiğinde `.github/workflows/deploy-pages.yml` otomatik çalışır.
-
-Repository **Settings → Secrets and variables → Actions** altında şu secret'lar gerekli:
-
-| Secret | Açıklama |
-|--------|----------|
-| `EXPO_PUBLIC_SUPABASE_URL` | Supabase proje URL'i |
-| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key |
-
-**Settings → Pages** bölümünde source olarak **GitHub Actions** seçilmeli; `github-pages` environment'ında deploy branch'i (`master` / `main`) izinli olmalı.
-
-Statik export `baseUrl: /vocab-coach-ai` ile üretilir (`app.json` → `experiments.baseUrl`). Farklı bir path kullanırsan `app.json` içindeki `baseUrl` değerini güncelle.
-
-## Ortam notları
-
-- Uygulama **hesap zorunludur**; misafir modu yoktur.
-- AI içerik üretimi arka planda çalışır; kelime listeye hemen düşer.
-- Safari iOS PWA'da güncelleme görünmüyorsa hard refresh yap veya ana ekran kısayolunu yeniden ekle.
-
-## Lisans
-
-Bu proje kişisel / eğitim amaçlıdır. Ticari kullanım veya yeniden dağıtım için repo sahibiyle iletişime geçin.
+Bu yazılımın kaynak kodu, veritabanı şeması ve AI prompt’ları izinsiz kopyalanamaz, dağıtılamaz veya ticari amaçla kullanılamaz. Canlı demo yalnızca tanıtım ve deneme içindir.
