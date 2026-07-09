@@ -36,21 +36,19 @@ Expo React Native, TypeScript, Expo Router, Supabase, Supabase Edge Functions, O
 
 - supabase/migrations/ — DB migrations
 
-## Current Known Issue
+## Correction Flow (implemented)
 
-The correction flow was being changed.
+- Normal word: `suggest-word-correction` is called before insert (fast, low-effort check). If it does not flag the word, the word is added immediately with no popup.
 
-Desired behavior:
+- Suspicious typo: before the word is inserted, a blocking popup (Modal) appears with the suggested correction(s). The word is NOT added yet.
 
-- Normal word: add fast, no interruption.
+- Suggested word selected in the popup: the suggested (corrected) word is added, and AI is generated only if the original button pressed was “Ekle + AI Oluştur”.
 
-- Suspicious typo: show inline suggestion.
+- “... yazdığım gibi ekle (AI'sız)” in the popup: adds the original typed word only, never calls `generate-word-content` for it, and immediately sets `ai_content_disabled = true` on it.
 
-- Suggested word selected: add selected word and optionally generate AI depending on original button.
+- `ai_content_disabled` words must never show AI-generated meaning/example content anywhere: Word Detail, Library, Sets, Card Sort, and Quiz/Review all filter or blank this out. Practice screens (card-sort, review) also exclude these words from being served as practice cards.
 
-- “Yazdığım gibi ekle”: add original typed word only, do not generate AI, and treat it as AI-disabled for this user word.
-
-- No hardcoded suggestions like usually/useful/analyze should appear while typing.
+- No hardcoded suggestions like usually/useful/analyze appear while typing; quick-add suggestions are derived only from the user's own existing words.
 
 ## Safety Rules
 

@@ -43,6 +43,7 @@ type ReviewWord = {
   next_review_at: string | null;
   last_reviewed_at: string | null;
   created_at: string;
+  ai_content_disabled: boolean | null;
   word_contents: WordContent | WordContent[] | null;
 };
 
@@ -69,6 +70,7 @@ const REVIEW_SELECT = `
   next_review_at,
   last_reviewed_at,
   created_at,
+  ai_content_disabled,
   word_contents (
     display_word,
     simple_definition,
@@ -541,6 +543,8 @@ function getFillBlankAnswer(item: ReviewWord) {
 }
 
 function hasUsableContent(item: ReviewWord, mode: PracticeMode) {
+  if (item.ai_content_disabled) return false;
+
   const content = getContent(item);
 
   if (!content?.display_word) return false;

@@ -31,6 +31,7 @@ type SortWord = {
   status: string | null;
   created_at: string;
   next_review_at: string | null;
+  ai_content_disabled: boolean | null;
   word_contents: WordContent | WordContent[] | null;
 };
 
@@ -39,6 +40,7 @@ const CARD_SORT_SELECT = `
   status,
   created_at,
   next_review_at,
+  ai_content_disabled,
   word_contents (
     display_word,
     normalized_word,
@@ -91,8 +93,8 @@ export default function CardSortScreen() {
       return;
     }
 
-    let typedWords = ((data ?? []) as SortWord[]).filter((item) =>
-      Boolean(getDisplayWord(item))
+    let typedWords = ((data ?? []) as SortWord[]).filter(
+      (item) => Boolean(getDisplayWord(item)) && !item.ai_content_disabled
     );
 
     if (selectedSetId) {

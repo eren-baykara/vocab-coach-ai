@@ -28,6 +28,7 @@ type UserWord = {
   status: string | null;
   created_at: string;
   next_review_at: string | null;
+  ai_content_disabled: boolean | null;
   word_contents: WordContent | WordContent[] | null;
 };
 
@@ -51,6 +52,7 @@ const WORD_SELECT = `
   status,
   created_at,
   next_review_at,
+  ai_content_disabled,
   word_contents (
     display_word,
     normalized_word,
@@ -204,8 +206,12 @@ export default function SetsScreen() {
         const content = getContent(item);
         const displayWord = content?.display_word?.toLowerCase() ?? "";
         const normalizedWord = content?.normalized_word?.toLowerCase() ?? "";
-        const meaning = content?.turkish_meaning?.toLowerCase() ?? "";
-        const definition = content?.simple_definition?.toLowerCase() ?? "";
+        const meaning = item.ai_content_disabled
+          ? ""
+          : content?.turkish_meaning?.toLowerCase() ?? "";
+        const definition = item.ai_content_disabled
+          ? ""
+          : content?.simple_definition?.toLowerCase() ?? "";
 
         return (
           displayWord.includes(cleanSearch) ||
@@ -742,7 +748,11 @@ export default function SetsScreen() {
                               <Text style={styles.wordText}>{getDisplayWord(word)}</Text>
                               <Text style={styles.wordMeta}>
                                 {word.status ?? "yeni"} •{" "}
-                                {hasAiContent(word) ? "AI hazır" : "AI bekliyor"}
+                                {word.ai_content_disabled
+                                  ? "AI kapalı"
+                                  : hasAiContent(word)
+                                    ? "AI hazır"
+                                    : "AI bekliyor"}
                               </Text>
                             </Pressable>
 
@@ -835,6 +845,8 @@ function getDisplayWord(item: UserWord) {
 }
 
 function hasAiContent(item: UserWord) {
+  if (item.ai_content_disabled) return false;
+
   const content = getContent(item);
 
   return Boolean(
