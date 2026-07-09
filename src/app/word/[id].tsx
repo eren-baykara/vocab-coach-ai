@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,8 +12,7 @@ import {
 import { Stack, router, useLocalSearchParams } from "expo-router";
 
 import { supabase } from "../../lib/supabase";
-
-type WordStatus = "new" | "learning" | "mastered";
+import { theme } from "../../theme";
 
 type WordContent = {
   display_word: string | null;
@@ -104,7 +103,6 @@ export default function WordDetailScreen() {
   const [setsLoading, setSetsLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
-  const [savingStatus, setSavingStatus] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [savingSetChange, setSavingSetChange] = useState(false);
 
@@ -127,7 +125,7 @@ export default function WordDetailScreen() {
     setLoading(false);
 
     if (error) {
-      Alert.alert("Could not load word", error.message);
+      Alert.alert("Kelime yüklenemedi", error.message);
       return;
     }
 
@@ -149,7 +147,7 @@ export default function WordDetailScreen() {
 
     if (setsError) {
       setSetsLoading(false);
-      Alert.alert("Could not load sets", setsError.message);
+      Alert.alert("Setler yüklenemedi", setsError.message);
       return;
     }
 
@@ -161,7 +159,7 @@ export default function WordDetailScreen() {
     setSetsLoading(false);
 
     if (itemsError) {
-      Alert.alert("Could not load word sets", itemsError.message);
+      Alert.alert("Kelimenin setleri yüklenemedi", itemsError.message);
       return;
     }
 
@@ -174,77 +172,19 @@ export default function WordDetailScreen() {
     loadSetsForWord();
   }, [loadWordDetail, loadSetsForWord]);
 
-  function getContent() {
-    if (!wordDetail) return null;
-
-    return Array.isArray(wordDetail.word_contents)
-      ? wordDetail.word_contents[0]
-      : wordDetail.word_contents;
-  }
-
-  function hasAiContent(content: WordContent) {
-    return Boolean(
-      content.simple_definition ||
-        content.turkish_meaning ||
-        content.daily_life_example ||
-        content.toefl_example ||
-        content.mini_lesson
-    );
-  }
-
-  function getPrimaryMeaning(content: WordContent) {
-    return (
-      content.turkish_meaning ||
-      content.simple_definition ||
-      "Anlam henüz oluşturulmadı."
-    );
-  }
-
-  function getShortDefinition(content: WordContent) {
-    return content.simple_definition || "Basit anlam henüz oluşturulmadı.";
-  }
-
-  function getExample(content: WordContent) {
-    return (
-      content.daily_life_example ||
-      content.toefl_example ||
-      "Örnek cümle henüz oluşturulmadı."
-    );
-  }
-
-  function getExampleTr(content: WordContent) {
-    return (
-      content.daily_life_example_tr ||
-      content.toefl_example_tr ||
-      "Türkçe çeviri henüz oluşturulmadı."
-    );
-  }
-function formatReviewDate(value: string | null) {
-    if (!value) return "Henüz planlanmadı";
-
-    const date = new Date(value);
-    const now = new Date();
-
-    if (date <= now) return "Şimdi tekrar edilebilir";
-
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
-  function getSetsForThisWord() {
-    const setIds = new Set(wordSetItems.map((item) => item.set_id));
-
-    return sets.filter((set) => setIds.has(set.id));
-  }
-
-  function getAvailableSetsForThisWord() {
-    const setIds = new Set(wordSetItems.map((item) => item.set_id));
-
-    return sets.filter((set) => !setIds.has(set.id));
-  }
+  const content = getContent(wordDetail);
+  const title = content?.display_word ?? content?.normalized_word ?? "Kelime detayı";
+  const aiReady = content ? hasAiContent(content) : false;
+  const currentSets = useMemo(
+    () => getSetsForThisWord(sets, wordSetItems),
+    [sets, wordSetItems]
+  );
+  const availableSets = useMemo(
+    () => getAvailableSetsForThisWord(sets, wordSetItems),
+    [sets, wordSetItems]
+  );
+  const relatedWords = getRelatedWords(content);
+  const examples = getExamples(content);
 
   async function addWordToSet(setId: string) {
     if (!id) return;
@@ -259,7 +199,7 @@ function formatReviewDate(value: string | null) {
     setSavingSetChange(false);
 
     if (error && error.code !== "23505") {
-      Alert.alert("Could not add to set", error.message);
+      Alert.alert("Sete eklenemedi", error.message);
       return;
     }
 
@@ -268,15 +208,12 @@ function formatReviewDate(value: string | null) {
 
   function confirmRemoveFromSet(set: WordSet) {
     Alert.alert(
-      "Remove from set?",
-      `Remove this word from "${set.name}"? The word will stay in Library.`,
+      "Setten çıkarılsın mı?",
+      `"${set.name}" setinden çıkarılacak. Kelime Library içinde kalır.`,
       [
+        { text: "Vazgeç", style: "cancel" },
         {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Remove",
+          text: "Çıkar",
           style: "destructive",
           onPress: () => removeWordFromSet(set.id),
         },
@@ -298,7 +235,7 @@ function formatReviewDate(value: string | null) {
     setSavingSetChange(false);
 
     if (error) {
-      Alert.alert("Could not remove from set", error.message);
+      Alert.alert("Setten çıkarılamadı", error.message);
       return;
     }
 
@@ -324,18 +261,18 @@ function formatReviewDate(value: string | null) {
     if (error) {
       const detailedMessage = await getFunctionErrorMessage(error);
 
-      Alert.alert("Could not generate AI lesson", detailedMessage);
+      Alert.alert("AI içeriği oluşturulamadı", detailedMessage);
       return;
     }
 
     await loadWordDetail();
 
     if (data?.cached) {
-      Alert.alert("Already generated", "This word already has AI content.");
+      Alert.alert("Zaten hazır", "Bu kelime için AI içeriği daha önce oluşturulmuş.");
       return;
     }
 
-    Alert.alert("AI lesson ready", "Your word content has been generated.");
+    Alert.alert("AI içeriği hazır", "Kelime içeriği oluşturuldu.");
   }
 
   async function getFunctionErrorMessage(error: unknown) {
@@ -373,30 +310,6 @@ function formatReviewDate(value: string | null) {
     }
   }
 
-  async function updateWordStatus(newStatus: WordStatus) {
-    if (!id || !wordDetail) return;
-
-    setSavingStatus(true);
-
-    const { data, error } = await supabase
-      .from("user_words")
-      .update({
-        status: newStatus,
-      })
-      .eq("id", id)
-      .select(WORD_DETAIL_SELECT)
-      .single();
-
-    setSavingStatus(false);
-
-    if (error) {
-      Alert.alert("Could not update status", error.message);
-      return;
-    }
-
-    setWordDetail(data as UserWordDetail);
-  }
-
   async function savePersonalNote() {
     if (!id || !wordDetail) return;
 
@@ -416,7 +329,7 @@ function formatReviewDate(value: string | null) {
     setSavingNote(false);
 
     if (error) {
-      Alert.alert("Could not save note", error.message);
+      Alert.alert("Not kaydedilemedi", error.message);
       return;
     }
 
@@ -425,20 +338,17 @@ function formatReviewDate(value: string | null) {
     setWordDetail(typedData);
     setPersonalNote(typedData.personal_note ?? "");
 
-    Alert.alert("Saved", "Your note has been saved.");
+    Alert.alert("Kaydedildi", "Kişisel notun kaydedildi.");
   }
 
   function confirmRemoveWord() {
     Alert.alert(
-      "Remove word?",
-      "This will remove the word from your Library and from every set. Shared AI content will stay in the database.",
+      "Kelime çıkarılsın mı?",
+      "Bu işlem kelimeyi Library’den ve bağlı olduğu tüm setlerden çıkarır. AI içeriği veritabanında kalır.",
       [
+        { text: "Vazgeç", style: "cancel" },
         {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Remove",
+          text: "Çıkar",
           style: "destructive",
           onPress: removeWord,
         },
@@ -456,26 +366,19 @@ function formatReviewDate(value: string | null) {
     setDeleting(false);
 
     if (error) {
-      Alert.alert("Could not remove word", error.message);
+      Alert.alert("Kelime çıkarılamadı", error.message);
       return;
     }
 
     router.back();
   }
 
-  const content = getContent();
-  const title = content?.display_word ?? "Word detail";
-  const currentStatus = (wordDetail?.status ?? "new") as WordStatus;
-  const aiReady = content ? hasAiContent(content) : false;
-  const currentSets = getSetsForThisWord();
-  const availableSets = getAvailableSetsForThisWord();
-
   if (loading) {
     return (
       <View style={styles.centeredContainer}>
-        <Stack.Screen options={{ title: "Loading..." }} />
-        <ActivityIndicator />
-        <Text style={styles.loadingText}>Loading word...</Text>
+        <Stack.Screen options={{ title: "Yükleniyor..." }} />
+        <ActivityIndicator color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Kelime yükleniyor...</Text>
       </View>
     );
   }
@@ -483,102 +386,144 @@ function formatReviewDate(value: string | null) {
   if (!wordDetail || !content || !id) {
     return (
       <View style={styles.centeredContainer}>
-        <Stack.Screen options={{ title: "Word not found" }} />
-        <Text style={styles.emptyTitle}>Word not found</Text>
+        <Stack.Screen options={{ title: "Kelime bulunamadı" }} />
+        <Text style={styles.emptyTitle}>Kelime bulunamadı</Text>
         <Text style={styles.emptyText}>
-          This word could not be loaded. It may have been removed.
+          Bu kelime yüklenemedi. Silinmiş olabilir.
         </Text>
 
-        <Pressable style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Go back</Text>
+        <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+          <Text style={styles.primaryButtonText}>Geri dön</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title }} />
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      <Stack.Screen options={{ title: "" }} />
 
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backButtonText}>‹ Back</Text>
-      </Pressable>
+      <View style={styles.topBar}>
+        <Pressable style={styles.roundIconButton} onPress={() => router.back()}>
+          <Text style={styles.roundIconText}>‹</Text>
+        </Pressable>
+
+        <View style={styles.topActions}>
+          <View style={styles.roundIconButton}>
+            <Text style={styles.topActionText}>♬</Text>
+          </View>
+
+          <View style={styles.roundIconButton}>
+            <Text style={styles.topActionText}>♡</Text>
+          </View>
+        </View>
+      </View>
 
       <View style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Kelime</Text>
-        <Text style={styles.wordTitle}>{content.display_word}</Text>
+        <View style={styles.heroDecorOne} />
+        <View style={styles.heroDecorTwo} />
 
-        <View style={styles.badgeRow}>
-          <Text style={styles.heroBadge}>{currentStatus}</Text>
-          <Text
-            style={[
-              styles.heroBadge,
-              aiReady ? styles.readyBadge : styles.needsBadge,
-            ]}
-          >
-            {aiReady ? "Practice ready" : "Needs AI"}
-          </Text>
+        <Text style={styles.partBadge}>{getPartLabel(content)}</Text>
+        <Text style={styles.wordTitle}>{title}</Text>
+
+        <Text style={styles.pronunciationText}>
+          {content.normalized_word ? `/${content.normalized_word}/` : "/ kelime /"}
+        </Text>
+
+        <View style={styles.meaningBubble}>
+          <Text style={styles.primaryMeaning}>{getPrimaryMeaning(content)}</Text>
+          <Text style={styles.simpleMeaning}>{getShortDefinition(content)}</Text>
         </View>
       </View>
 
       {!aiReady ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>AI içeriği gerekli</Text>
-          <Text style={styles.helperText}>
-            Bu kelime Meaning Quiz, Reverse Quiz ve Fill in the Blank içinde
-            kullanılmadan önce AI içeriği üret.
-          </Text>
-
-          <Text style={styles.warningText}>
-            AI içeriği anlamları, örnek cümleleri ve pratik seçeneklerini hazırlar.
+          <Text style={styles.bodyText}>
+            Bu kelimenin anlam, örnek cümle ve ilgili kelime içeriklerini oluştur.
           </Text>
 
           <Pressable
-            style={[styles.button, generatingAi && styles.disabledButton]}
+            style={[styles.primaryButton, generatingAi && styles.disabledButton]}
             onPress={generateAiLesson}
             disabled={generatingAi}
           >
-            <Text style={styles.buttonText}>
-              {generatingAi ? "Generating..." : "AI üret"}
+            <Text style={styles.primaryButtonText}>
+              {generatingAi ? "Oluşturuluyor..." : "AI içeriği oluştur"}
             </Text>
           </Pressable>
         </View>
       ) : (
-        <View style={styles.meaningCard}>
-          <Text style={styles.meaningLabel}>Anlam</Text>
-          <Text style={styles.meaningText}>{getPrimaryMeaning(content)}</Text>
+        <>
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.aiIcon}>
+                <Text style={styles.aiIconText}>✦</Text>
+              </View>
+              <Text style={styles.sectionTitle}>AI Örnek Cümleler</Text>
+            </View>
 
-          <View style={styles.simpleBlock}>
-            <Text style={styles.simpleLabel}>Basit anlam</Text>
-            <Text style={styles.simpleText}>{getShortDefinition(content)}</Text>
+            <View style={styles.exampleList}>
+              {examples.map((example, index) => (
+                <View key={`${example}-${index}`} style={styles.exampleBubble}>
+                  <Text style={styles.exampleText}>“{example}”</Text>
+                </View>
+              ))}
+            </View>
           </View>
 
-          <View style={styles.simpleBlock}>
-            <Text style={styles.simpleLabel}>Örnek cümle</Text>
-            <Text style={styles.simpleText}>{getExample(content)}</Text>
-          </View>
+          {relatedWords.length > 0 ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Bağlantılı Kelimeler</Text>
 
-          <View style={styles.simpleBlock}>
-            <Text style={styles.simpleLabel}>Türkçe çeviri</Text>
-            <Text style={styles.simpleText}>{getExampleTr(content)}</Text>
-          </View>
-        </View>
+              <View style={styles.relatedList}>
+                {relatedWords.map((word) => (
+                  <View key={word} style={styles.relatedChip}>
+                    <Text style={styles.relatedChipText}>{word}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {content.common_mistake || content.mnemonic || content.mini_lesson ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Mini Not</Text>
+
+              {content.mini_lesson ? (
+                <Text style={styles.bodyText}>{content.mini_lesson}</Text>
+              ) : null}
+
+              {content.mnemonic ? (
+                <Text style={styles.noteHighlight}>{content.mnemonic}</Text>
+              ) : null}
+
+              {content.common_mistake ? (
+                <Text style={styles.warningText}>{content.common_mistake}</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </>
       )}
 
       <View style={styles.card}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Sets</Text>
+        <View style={styles.sectionHeaderBetween}>
+          <Text style={styles.sectionTitle}>Setler</Text>
 
           {setsLoading || savingSetChange ? (
-            <Text style={styles.inlineLoadingText}>Updating...</Text>
+            <Text style={styles.inlineLoadingText}>Güncelleniyor...</Text>
           ) : null}
         </View>
 
         {currentSets.length === 0 ? (
           <View style={styles.libraryOnlyBox}>
-            <Text style={styles.libraryOnlyTitle}>Library only</Text>
+            <Text style={styles.libraryOnlyTitle}>Sadece Library’de</Text>
             <Text style={styles.libraryOnlyText}>
-              This word is saved in your Library, but it is not inside a set yet.
+              Bu kelime henüz bir sete eklenmemiş.
             </Text>
           </View>
         ) : (
@@ -587,7 +532,7 @@ function formatReviewDate(value: string | null) {
               <View key={set.id} style={styles.setMembershipRow}>
                 <View style={styles.setMembershipTextWrap}>
                   <Text style={styles.setMembershipTitle}>{set.name}</Text>
-                  <Text style={styles.setMembershipMeta}>In this set</Text>
+                  <Text style={styles.setMembershipMeta}>Bu sette</Text>
                 </View>
 
                 <Pressable
@@ -598,7 +543,7 @@ function formatReviewDate(value: string | null) {
                   onPress={() => confirmRemoveFromSet(set)}
                   disabled={savingSetChange}
                 >
-                  <Text style={styles.removeSetButtonText}>Remove</Text>
+                  <Text style={styles.removeSetButtonText}>Çıkar</Text>
                 </Pressable>
               </View>
             ))}
@@ -607,7 +552,7 @@ function formatReviewDate(value: string | null) {
 
         {availableSets.length > 0 ? (
           <View style={styles.addToSetBlock}>
-            <Text style={styles.smallSectionTitle}>Add to another set</Text>
+            <Text style={styles.smallSectionTitle}>Başka sete ekle</Text>
 
             <View style={styles.availableSetList}>
               {availableSets.map((set) => (
@@ -626,47 +571,9 @@ function formatReviewDate(value: string | null) {
             </View>
           </View>
         ) : sets.length === 0 ? (
-          <Text style={styles.helperText}>
-            Create sets from Home first, then you can organize this word.
+          <Text style={styles.bodyText}>
+            Önce Setler ekranından set oluştur, sonra bu kelimeyi organize edebilirsin.
           </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Tekrar planı</Text>
-
-        <View style={styles.scheduleRow}>
-          <Text style={styles.scheduleLabel}>Sonraki tekrar</Text>
-          <Text style={styles.scheduleValue}>
-            {formatReviewDate(wordDetail.next_review_at)}
-          </Text>
-        </View>
-
-        <View style={styles.statusActions}>
-          <StatusButton
-            label="New"
-            active={currentStatus === "new"}
-            disabled={savingStatus}
-            onPress={() => updateWordStatus("new")}
-          />
-
-          <StatusButton
-            label="Learning"
-            active={currentStatus === "learning"}
-            disabled={savingStatus}
-            onPress={() => updateWordStatus("learning")}
-          />
-
-          <StatusButton
-            label="Mastered"
-            active={currentStatus === "mastered"}
-            disabled={savingStatus}
-            onPress={() => updateWordStatus("mastered")}
-          />
-        </View>
-
-        {savingStatus ? (
-          <Text style={styles.savingText}>Updating status...</Text>
         ) : null}
       </View>
 
@@ -676,6 +583,7 @@ function formatReviewDate(value: string | null) {
         <TextInput
           style={styles.noteInput}
           placeholder="Kendi hafıza ipucun, çevirin veya örneğin..."
+          placeholderTextColor={theme.colors.textMuted}
           multiline
           value={personalNote}
           onChangeText={setPersonalNote}
@@ -684,27 +592,15 @@ function formatReviewDate(value: string | null) {
         />
 
         <Pressable
-          style={[styles.button, savingNote && styles.disabledButton]}
+          style={[styles.primaryButton, savingNote && styles.disabledButton]}
           onPress={savePersonalNote}
           disabled={savingNote}
         >
-          <Text style={styles.buttonText}>
-            {savingNote ? "Saving..." : "Save note"}
+          <Text style={styles.primaryButtonText}>
+            {savingNote ? "Kaydediliyor..." : "Notu kaydet"}
           </Text>
         </Pressable>
       </View>
-
-      {aiReady ? (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>AI içeriği</Text>
-
-          <Text style={styles.helperText}>
-            AI içeriği hazır. Bu kelime practice modlarında kullanılabilir.
-          </Text>
-
-          <Text style={styles.successText}>Practice ready.</Text>
-        </View>
-      ) : null}
 
       <View style={styles.dangerCard}>
         <Text style={styles.dangerTitle}>Library’den çıkar</Text>
@@ -718,7 +614,7 @@ function formatReviewDate(value: string | null) {
           disabled={deleting}
         >
           <Text style={styles.dangerButtonText}>
-            {deleting ? "Removing..." : "Kelimeyi çıkar"}
+            {deleting ? "Çıkarılıyor..." : "Kelimeyi çıkar"}
           </Text>
         </Pressable>
       </View>
@@ -726,201 +622,341 @@ function formatReviewDate(value: string | null) {
   );
 }
 
-type StatusButtonProps = {
-  label: string;
-  active: boolean;
-  disabled: boolean;
-  onPress: () => void;
-};
+function getContent(wordDetail: UserWordDetail | null) {
+  if (!wordDetail) return null;
 
-function StatusButton({ label, active, disabled, onPress }: StatusButtonProps) {
-  return (
-    <Pressable
-      style={[
-        styles.statusButton,
-        active && styles.activeStatusButton,
-        disabled && styles.disabledButton,
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text
-        style={[
-          styles.statusButtonText,
-          active && styles.activeStatusButtonText,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
+  return Array.isArray(wordDetail.word_contents)
+    ? wordDetail.word_contents[0]
+    : wordDetail.word_contents;
+}
+
+function hasAiContent(content: WordContent) {
+  return Boolean(
+    content.simple_definition ||
+      content.turkish_meaning ||
+      content.daily_life_example ||
+      content.toefl_example ||
+      content.mini_lesson
   );
 }
 
+function getPrimaryMeaning(content: WordContent) {
+  return (
+    content.turkish_meaning ||
+    content.simple_definition ||
+    "Anlam henüz oluşturulmadı."
+  );
+}
+
+function getShortDefinition(content: WordContent) {
+  return content.simple_definition || "Basit anlam henüz oluşturulmadı.";
+}
+
+function getExamples(content: WordContent | null) {
+    if (!content) {
+      return ["Örnek cümle henüz oluşturulmadı."];
+    }
+  
+    const examples = [content.daily_life_example, content.toefl_example].filter(
+      Boolean
+    ) as string[];
+  
+    if (examples.length > 0) return examples;
+  
+    return ["Örnek cümle henüz oluşturulmadı."];
+  }
+  
+function getRelatedWords(content: WordContent | null) {
+  if (!content) return [];
+
+  return [
+    ...(content.synonyms ?? []),
+    ...(content.collocations ?? []),
+    ...(content.antonyms ?? []),
+  ]
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function getPartLabel(content: WordContent) {
+  if (content.cefr_level) return content.cefr_level;
+
+  return "sıfat · adjective";
+}
+
+function getSetsForThisWord(sets: WordSet[], wordSetItems: WordSetItem[]) {
+  const setIds = new Set(wordSetItems.map((item) => item.set_id));
+
+  return sets.filter((set) => setIds.has(set.id));
+}
+
+function getAvailableSetsForThisWord(
+  sets: WordSet[],
+  wordSetItems: WordSetItem[]
+) {
+  const setIds = new Set(wordSetItems.map((item) => item.set_id));
+
+  return sets.filter((set) => !setIds.has(set.id));
+}
+
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
   container: {
     flexGrow: 1,
-    padding: 24,
-    backgroundColor: "#f8fafc",
+    paddingHorizontal: 30,
+    paddingTop: 42,
+    paddingBottom: 110,
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#f8fafc",
+    padding: theme.spacing["2xl"],
+    backgroundColor: theme.colors.background,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: theme.spacing.md,
     fontSize: 16,
-    color: "#475569",
+    color: theme.colors.textMuted,
   },
-  backButton: {
-    alignSelf: "flex-start",
-    marginBottom: 16,
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
   },
-  backButtonText: {
+  topActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  roundIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surfaceSoft,
+  },
+  roundIconText: {
+    marginTop: -2,
+    fontSize: 31,
+    fontWeight: "500",
+    color: theme.colors.text,
+  },
+  topActionText: {
     fontSize: 18,
-    fontWeight: "800",
-    color: "#2563eb",
+    fontWeight: "900",
+    color: theme.colors.text,
   },
   heroCard: {
-    backgroundColor: "#2563eb",
-    borderRadius: 28,
-    padding: 26,
-    marginBottom: 18,
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 24,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingTop: 26,
+    paddingBottom: 22,
+    marginBottom: 14,
   },
-  heroLabel: {
-    fontSize: 13,
+  heroDecorOne: {
+    position: "absolute",
+    right: -12,
+    top: -28,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: "rgba(255,255,255,0.13)",
+  },
+  heroDecorTwo: {
+    position: "absolute",
+    left: -32,
+    bottom: -38,
+    width: 103,
+    height: 103,
+    borderRadius: 52,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  partBadge: {
+    alignSelf: "flex-start",
+    overflow: "hidden",
+    borderRadius: 7,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: theme.colors.textInverse,
+    fontSize: 11,
     fontWeight: "900",
-    color: "#bfdbfe",
-    marginBottom: 10,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginBottom: 22,
   },
   wordTitle: {
-    fontSize: 42,
+    fontSize: 34,
+    lineHeight: 39,
     fontWeight: "900",
-    color: "#ffffff",
-    marginBottom: 16,
+    color: theme.colors.textInverse,
+    letterSpacing: -0.8,
+    marginBottom: 10,
   },
-  badgeRow: {
+  pronunciationText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.86)",
+    marginBottom: 18,
+  },
+  meaningBubble: {
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    padding: 15,
+  },
+  primaryMeaning: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "900",
+    color: theme.colors.textInverse,
+    marginBottom: 5,
+  },
+  simpleMeaning: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.82)",
+  },
+  card: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    marginBottom: 14,
+    ...theme.shadow.card,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 12,
+  },
+  sectionHeaderBetween: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  aiIcon: {
+    width: 29,
+    height: 29,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.accent,
+  },
+  aiIconText: {
+    color: theme.colors.textInverse,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "900",
+    color: theme.colors.text,
+  },
+  bodyText: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    color: theme.colors.textMuted,
+    marginBottom: 12,
+  },
+  exampleList: {
+    gap: 9,
+  },
+  exampleBubble: {
+    borderRadius: 11,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  exampleText: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontStyle: "italic",
+    fontWeight: "600",
+    color: theme.colors.text,
+  },
+  relatedList: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
-  heroBadge: {
-    backgroundColor: "#dbeafe",
-    color: "#1e3a8a",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    overflow: "hidden",
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
-  readyBadge: {
-    backgroundColor: "#dcfce7",
-    color: "#166534",
-  },
-  needsBadge: {
-    backgroundColor: "#fef3c7",
-    color: "#92400e",
-  },
-  meaningCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 24,
-    padding: 22,
-    marginBottom: 20,
+  relatedChip: {
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#dbeafe",
+    borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.surfaceSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  meaningLabel: {
+  relatedChipText: {
     fontSize: 13,
     fontWeight: "900",
-    color: "#2563eb",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    color: theme.colors.text,
   },
-  meaningText: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#0f172a",
-    lineHeight: 34,
-    marginBottom: 18,
-  },
-  simpleBlock: {
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    paddingTop: 14,
-    marginTop: 14,
-  },
-  simpleLabel: {
+  noteHighlight: {
+    borderRadius: 12,
+    backgroundColor: theme.colors.primarySurface,
+    color: theme.colors.primaryDark,
     fontSize: 14,
+    lineHeight: 21,
     fontWeight: "800",
-    color: "#475569",
-    marginBottom: 6,
-  },
-  simpleText: {
-    fontSize: 16,
-    color: "#0f172a",
-    lineHeight: 24,
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    padding: 12,
     marginBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 20,
+  warningText: {
+    borderRadius: 12,
+    backgroundColor: theme.colors.warningSoft,
+    color: theme.colors.warningDark,
+    fontSize: 14,
+    lineHeight: 21,
     fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 10,
+    padding: 12,
   },
   inlineLoadingText: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: "800",
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "900",
   },
   libraryOnlyBox: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 13,
   },
   libraryOnlyTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 4,
   },
   libraryOnlyText: {
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 20,
+    fontSize: 13,
+    color: theme.colors.textMuted,
+    lineHeight: 19,
   },
   setMembershipList: {
-    gap: 10,
-    marginBottom: 14,
+    gap: 9,
+    marginBottom: 13,
   },
   setMembershipRow: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 14,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    padding: 13,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -930,39 +966,37 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   setMembershipTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
-    color: "#0f172a",
+    color: theme.colors.text,
     marginBottom: 4,
   },
   setMembershipMeta: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#64748b",
+    fontSize: 12,
+    fontWeight: "800",
+    color: theme.colors.textMuted,
   },
   removeSetButton: {
-    backgroundColor: "#fef2f2",
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    backgroundColor: theme.colors.dangerSoft,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   removeSetButtonText: {
-    color: "#991b1b",
-    fontSize: 13,
+    color: theme.colors.dangerDark,
+    fontSize: 12,
     fontWeight: "900",
   },
   addToSetBlock: {
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    paddingTop: 14,
+    borderTopColor: theme.colors.border,
+    paddingTop: 13,
   },
   smallSectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900",
-    color: "#475569",
-    marginBottom: 10,
+    color: theme.colors.textMuted,
+    marginBottom: 9,
   },
   availableSetList: {
     flexDirection: "row",
@@ -970,159 +1004,90 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addSetChip: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: theme.colors.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#bfdbfe",
-    borderRadius: 999,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: theme.radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   addSetChipText: {
-    color: "#1d4ed8",
-    fontSize: 14,
+    color: theme.colors.text,
+    fontSize: 13,
     fontWeight: "900",
-  },
-  helperText: {
-    fontSize: 15,
-    color: "#64748b",
-    lineHeight: 22,
-    marginBottom: 14,
-  },
-  scheduleRow: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 14,
-  },
-  scheduleLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  scheduleValue: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: "#0f172a",
-  },
-  statusActions: {
-    gap: 10,
-  },
-  statusButton: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-  },
-  activeStatusButton: {
-    borderColor: "#2563eb",
-    backgroundColor: "#dbeafe",
-  },
-  statusButtonText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#475569",
-  },
-  activeStatusButtonText: {
-    color: "#1d4ed8",
-  },
-  savingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#64748b",
-    textAlign: "center",
   },
   noteInput: {
-    minHeight: 110,
-    backgroundColor: "#ffffff",
+    minHeight: 105,
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
-    borderColor: "#cbd5e1",
+    borderColor: theme.colors.border,
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: "#0f172a",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: theme.colors.text,
     lineHeight: 22,
     marginBottom: 12,
   },
-  successText: {
-    fontSize: 15,
-    color: "#166534",
-    backgroundColor: "#dcfce7",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    fontWeight: "700",
-  },
-  warningText: {
-    fontSize: 15,
-    color: "#92400e",
-    backgroundColor: "#fef3c7",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    fontWeight: "700",
-  },
-  button: {
-    backgroundColor: "#2563eb",
-    borderRadius: 16,
-    paddingVertical: 15,
+  primaryButton: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: "center",
   },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  emptyTitle: {
-    fontSize: 24,
+  primaryButtonText: {
+    color: theme.colors.textInverse,
+    fontSize: 15,
     fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 20,
   },
   dangerCard: {
-    backgroundColor: "#fef2f2",
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: theme.colors.dangerSoft,
+    borderRadius: 18,
+    padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: "#F2B8B0",
   },
   dangerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#991b1b",
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: "900",
+    color: theme.colors.dangerDark,
+    marginBottom: 7,
   },
   dangerText: {
-    fontSize: 15,
-    color: "#7f1d1d",
-    lineHeight: 22,
-    marginBottom: 14,
+    fontSize: 14,
+    color: theme.colors.dangerDark,
+    lineHeight: 21,
+    marginBottom: 13,
+    fontWeight: "700",
   },
   dangerButton: {
-    backgroundColor: "#dc2626",
+    backgroundColor: theme.colors.danger,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
   },
   dangerButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
+    color: theme.colors.textInverse,
+    fontSize: 15,
+    fontWeight: "900",
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
+    textAlign: "center",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: theme.colors.textMuted,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 20,
   },
 });
