@@ -21,7 +21,11 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Kelimelik AI",
+      "shortName": "Kelimelik",
+      "themeColor": "#BC5A2A",
+      "backgroundColor": "#F7F3EC"
     },
     "plugins": [
       "expo-router",
@@ -37,7 +41,8 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": true,
+      "baseUrl": "/vocab-coach-ai"
     }
   }
 }
