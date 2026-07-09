@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import * as Speech from "expo-speech";
+import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../../lib/supabase";
 import { theme } from "../../theme";
@@ -21,6 +23,7 @@ type WordContent = {
   academic_definition: string | null;
   turkish_meaning: string | null;
   part_of_speech: string | null;
+  phonetic: string | null;
   toefl_example: string | null;
   toefl_example_tr: string | null;
   daily_life_example: string | null;
@@ -79,6 +82,7 @@ const WORD_DETAIL_SELECT = `
     academic_definition,
     turkish_meaning,
     part_of_speech,
+    phonetic,
     toefl_example,
     toefl_example_tr,
     daily_life_example,
@@ -109,6 +113,7 @@ export default function WordDetailScreen() {
   const [savingNote, setSavingNote] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [savingSetChange, setSavingSetChange] = useState(false);
+  const [speakingText, setSpeakingText] = useState<string | null>(null);
 
   const [wordDetail, setWordDetail] = useState<UserWordDetail | null>(null);
   const [personalNote, setPersonalNote] = useState("");
@@ -175,6 +180,29 @@ export default function WordDetailScreen() {
     loadWordDetail();
     loadSetsForWord();
   }, [loadWordDetail, loadSetsForWord]);
+
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
+
+  async function speak(text: string) {
+    const cleanText = text.trim();
+
+    if (!cleanText) return;
+
+    await Speech.stop();
+    setSpeakingText(cleanText);
+
+    Speech.speak(cleanText, {
+      language: "en-US",
+      rate: 0.92,
+      onDone: () => setSpeakingText(null),
+      onStopped: () => setSpeakingText(null),
+      onError: () => setSpeakingText(null),
+    });
+  }
 
   const content = getContent(wordDetail);
   const title = content?.display_word ?? content?.normalized_word ?? "Kelime detayı";
@@ -506,11 +534,34 @@ export default function WordDetailScreen() {
         <Text style={styles.partBadge}>
           {getPartLabel(content, aiContentDisabled)}
         </Text>
-        <Text style={styles.wordTitle}>{title}</Text>
 
-        <Text style={styles.pronunciationText}>
-          {content.normalized_word ? `/${content.normalized_word}/` : "/ kelime /"}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.wordTitle}>{title}</Text>
+
+          {content.normalized_word ? (
+            <Pressable
+              style={[
+                styles.listenButton,
+                speakingText === content.normalized_word &&
+                  styles.listenButtonActive,
+              ]}
+              onPress={() => speak(content.normalized_word as string)}
+              disabled={speakingText === content.normalized_word}
+              accessibilityLabel="Kelimeyi dinle"
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name="volume-high"
+                color={theme.colors.textInverse}
+                size={18}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {!aiContentDisabled && content.phonetic ? (
+          <Text style={styles.phoneticText}>{formatPhonetic(content.phonetic)}</Text>
+        ) : null}
 
         <View style={styles.meaningBubble}>
           <Text style={styles.primaryMeaning}>
@@ -823,6 +874,16 @@ function normalizePartOfSpeech(partOfSpeech: string | null | undefined) {
   return partOfSpeech?.trim().toLowerCase() ?? "";
 }
 
+function formatPhonetic(phonetic: string) {
+  const trimmed = phonetic.trim();
+
+  if (!trimmed) return "";
+
+  return trimmed.startsWith("/") && trimmed.endsWith("/")
+    ? trimmed
+    : `/${trimmed}/`;
+}
+
 function getSetsForThisWord(sets: WordSet[], wordSetItems: WordSetItem[]) {
   const setIds = new Set(wordSetItems.map((item) => item.set_id));
 
@@ -921,19 +982,39 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 22,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 18,
+  },
   wordTitle: {
+    flexShrink: 1,
     fontSize: 34,
     lineHeight: 39,
     fontWeight: "900",
     color: theme.colors.textInverse,
     letterSpacing: -0.8,
-    marginBottom: 10,
   },
-  pronunciationText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "rgba(255,255,255,0.86)",
-    marginBottom: 18,
+  listenButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  listenButtonActive: {
+    backgroundColor: "rgba(255,255,255,0.4)",
+  },
+  phoneticText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "700",
+    fontStyle: "italic",
+    color: "rgba(255,255,255,0.78)",
+    marginTop: -10,
+    marginBottom: 14,
   },
   meaningBubble: {
     borderRadius: 14,
