@@ -74,6 +74,19 @@ const SET_FILTERS: { key: SetFilter; label: string }[] = [
   { key: "completed", label: "Tamamlandı" },
 ];
 
+const ALL_WORDS_SET_ID = "__all_words__";
+
+const ALL_WORDS_SET: WordSet = {
+  id: ALL_WORDS_SET_ID,
+  name: "Tüm Kelimeler",
+  description: "Set oluşturmadan eklediğin tüm kelimeler",
+  created_at: "",
+};
+
+function isAllWordsSet(setId: string | null | undefined) {
+  return setId === ALL_WORDS_SET_ID;
+}
+
 export default function SetsScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -179,8 +192,28 @@ export default function SetsScreen() {
     }
   }, [wordsChangeToken, session, loadSetsData]);
 
-  const expandedSet = sets.find((set) => set.id === expandedSetId) ?? null;
-  const expandedSetWords = expandedSet ? getWordsForSet(expandedSet.id) : [];
+  const expandedSet =
+    expandedSetId === ALL_WORDS_SET_ID
+      ? ALL_WORDS_SET
+      : (sets.find((set) => set.id === expandedSetId) ?? null);
+
+  const showAllWordsSet = useMemo(() => {
+    const cleanSearch = setSearchText.trim().toLowerCase();
+    const stats = getSetStats(ALL_WORDS_SET_ID);
+    const isCompleted = stats.total > 0 && stats.learned === stats.total;
+
+    const matchesSearch =
+      !cleanSearch ||
+      ALL_WORDS_SET.name.toLowerCase().includes(cleanSearch) ||
+      (ALL_WORDS_SET.description?.toLowerCase().includes(cleanSearch) ?? false);
+
+    const matchesFilter =
+      selectedFilter === "all" ||
+      (selectedFilter === "completed" && isCompleted) ||
+      (selectedFilter === "active" && !isCompleted);
+
+    return matchesSearch && matchesFilter;
+  }, [words, setSearchText, selectedFilter, setItems]);
 
   const filteredSets = useMemo(() => {
     const cleanSearch = setSearchText.trim().toLowerCase();
@@ -204,7 +237,7 @@ export default function SetsScreen() {
   }, [sets, setItems, words, setSearchText, selectedFilter]);
 
   const addableWords = useMemo(() => {
-    if (!expandedSet) return [];
+    if (!expandedSet || isAllWordsSet(expandedSet.id)) return [];
 
     const cleanSearch = addWordSearch.trim().toLowerCase();
     const currentWordIds = new Set(
@@ -308,6 +341,8 @@ export default function SetsScreen() {
   }
 
   function confirmDeleteSet(set: WordSet) {
+    if (isAllWordsSet(set.id)) return;
+
     Alert.alert(
       "Set silinsin mi?",
       `"${set.name}" silinecek. Kelimelerin Library içinde kalır.`,
@@ -388,7 +423,7 @@ export default function SetsScreen() {
         originalWord: cleanWord,
         suggestion,
         generateAiAfterAdd: true,
-        setId: expandedSetId,
+        setId: isAllWordsSet(expandedSetId) ? null : expandedSetId,
       });
 
       return;
@@ -404,7 +439,7 @@ export default function SetsScreen() {
 
     const targetWord = await addUserWord(cleanWord, {
       generateAi: true,
-      setId: expandedSetId,
+      setId: isAllWordsSet(expandedSetId) ? null : expandedSetId,
     });
 
     setSavingSetItem(false);
@@ -416,7 +451,7 @@ export default function SetsScreen() {
   }
 
   async function addExistingWordToSet(wordId: string) {
-    if (!expandedSetId) return;
+    if (!expandedSetId || isAllWordsSet(expandedSetId)) return;
 
     setSavingSetItem(true);
 
@@ -482,6 +517,8 @@ export default function SetsScreen() {
   }
 
   function getWordsForSet(setId: string) {
+    if (isAllWordsSet(setId)) return words;
+
     const wordIds = new Set(
       setItems
         .filter((item) => item.set_id === setId)
@@ -605,244 +642,282 @@ export default function SetsScreen() {
         </View>
       ) : null}
 
-      {setsLoading && sets.length === 0 ? (
+      {setsLoading && words.length === 0 && sets.length === 0 ? (
         <View style={styles.emptyCard}>
           <ActivityIndicator color={theme.colors.primary} />
           <Text style={styles.emptyStateText}>Setlerin yükleniyor...</Text>
         </View>
-      ) : filteredSets.length === 0 ? (
+      ) : !showAllWordsSet && filteredSets.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyStateTitle}>
-            {sets.length === 0 ? "Henüz set yok" : "Sonuç bulunamadı"}
+            {words.length === 0 && sets.length === 0
+              ? "Henüz kelime yok"
+              : "Sonuç bulunamadı"}
           </Text>
           <Text style={styles.emptyStateText}>
-            {sets.length === 0
-              ? "Sağ üstteki + butonuyla ilk setini oluştur."
+            {words.length === 0 && sets.length === 0
+              ? "Bugün ekranından kelime eklediğinde Tüm Kelimeler setinde görünecek."
               : "Farklı bir arama veya filtre deneyebilirsin."}
           </Text>
         </View>
       ) : (
         <View style={styles.setList}>
-          {filteredSets.map((set, index) => {
-            const stats = getSetStats(set.id);
-            const isEditing = editingSetId === set.id;
-            const isExpanded = expandedSetId === set.id;
-            const savingThisSet = savingRenameId === set.id;
-            const deletingThisSet = deletingSetId === set.id;
-            const progress = getSetProgress(stats.total, stats.learned);
-            const progressWidth = `${progress}%` as `${number}%`;
-            const isCompleted = stats.total > 0 && stats.learned === stats.total;
-            const accent = getSetAccent(index);
+          {showAllWordsSet
+            ? renderSetCard(ALL_WORDS_SET, 0, { isVirtual: true })
+            : null}
 
-            return (
-              <View key={set.id} style={styles.setCard}>
-                <Pressable
-                  style={styles.setCardHeader}
-                  onPress={() => toggleSetDetails(set)}
-                >
-                  <View style={[styles.setIcon, accent.iconStyle]}>
-                    <Text style={styles.setIconText}>{getSetIcon(set.name, index)}</Text>
-                  </View>
-
-                  <View style={styles.setMain}>
-                    <View style={styles.setTitleRow}>
-                      <Text style={styles.setTitle} numberOfLines={2}>
-                        {set.name}
-                      </Text>
-
-                      {isCompleted ? (
-                        <View style={styles.completedBadge}>
-                          <Text style={styles.completedBadgeText}>Tamamlandı</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <Text style={styles.setMeta}>{stats.total} kelime</Text>
-
-                    <View style={styles.progressRow}>
-                      <View style={styles.progressTrack}>
-                        <View
-                          style={[
-                            styles.progressFill,
-                            accent.progressStyle,
-                            { width: progressWidth },
-                          ]}
-                        />
-                      </View>
-
-                      <Text style={styles.progressText}>{progress}%</Text>
-                    </View>
-                  </View>
-                </Pressable>
-
-                {isExpanded ? (
-                  <View style={styles.expandedBox}>
-                    <View style={styles.actionRow}>
-                      <Pressable
-                        style={styles.secondaryButton}
-                        onPress={() => startEditingSet(set)}
-                      >
-                        <Text style={styles.secondaryButtonText}>Adı düzenle</Text>
-                      </Pressable>
-
-                      <Pressable
-                        style={[styles.dangerButton, deletingThisSet && styles.disabledButton]}
-                        onPress={() => confirmDeleteSet(set)}
-                        disabled={deletingThisSet}
-                      >
-                        <Text style={styles.dangerButtonText}>
-                          {deletingThisSet ? "Siliniyor..." : "Sil"}
-                        </Text>
-                      </Pressable>
-                    </View>
-
-                    {isEditing ? (
-                      <View style={styles.editBox}>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Set adı"
-                          placeholderTextColor={theme.colors.textMuted}
-                          value={editingSetName}
-                          onChangeText={setEditingSetName}
-                          editable={!savingThisSet && !deletingThisSet}
-                          onSubmitEditing={() => saveSetName(set)}
-                        />
-
-                        <View style={styles.actionRow}>
-                          <Pressable
-                            style={[
-                              styles.primaryButton,
-                              (savingThisSet || deletingThisSet) && styles.disabledButton,
-                            ]}
-                            onPress={() => saveSetName(set)}
-                            disabled={savingThisSet || deletingThisSet}
-                          >
-                            <Text style={styles.primaryButtonText}>
-                              {savingThisSet ? "Kaydediliyor..." : "Kaydet"}
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={styles.secondaryButton}
-                            onPress={cancelEditingSet}
-                            disabled={savingThisSet || deletingThisSet}
-                          >
-                            <Text style={styles.secondaryButtonText}>Vazgeç</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ) : null}
-
-                    <Text style={styles.contentsTitle}>Set içeriği</Text>
-
-                    {expandedSetWords.length === 0 ? (
-                      <View style={styles.emptyMiniState}>
-                        <Text style={styles.emptyMiniTitle}>Bu set boş</Text>
-                        <Text style={styles.emptyMiniText}>
-                          Aşağıdan kelime ekleyebilirsin.
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={styles.wordList}>
-                        {expandedSetWords.map((word) => (
-                          <View key={word.id} style={styles.wordRow}>
-                            <Pressable
-                              style={styles.wordInfo}
-                              onPress={() => openWordDetail(word)}
-                            >
-                              <Text style={styles.wordText}>{getDisplayWord(word)}</Text>
-                              <Text style={styles.wordMeta}>
-                                {word.status ?? "yeni"} •{" "}
-                                {word.ai_content_disabled
-                                  ? "AI kapalı"
-                                  : hasAiContent(word)
-                                    ? "AI hazır"
-                                    : "AI bekliyor"}
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              style={[
-                                styles.removeWordButton,
-                                savingSetItem && styles.disabledButton,
-                              ]}
-                              onPress={() => confirmRemoveWordFromSet(word)}
-                              disabled={savingSetItem}
-                            >
-                              <Text style={styles.removeWordButtonText}>Çıkar</Text>
-                            </Pressable>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    <View style={styles.addWordsBox}>
-                      <Text style={styles.contentsTitle}>Bu sete kelime ekle</Text>
-
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Örn: usually"
-                        placeholderTextColor={theme.colors.textMuted}
-                        autoCapitalize="none"
-                        value={addWordSearch}
-                        onChangeText={setAddWordSearch}
-                        editable={!savingSetItem && !checkingWordCorrection}
-                        onSubmitEditing={handleAddWordToExpandedSet}
-                      />
-
-                      <Pressable
-                        style={[
-                          styles.primaryButton,
-                          (savingSetItem || checkingWordCorrection) &&
-                            styles.disabledButton,
-                        ]}
-                        onPress={handleAddWordToExpandedSet}
-                        disabled={savingSetItem || checkingWordCorrection}
-                      >
-                        <Text style={styles.primaryButtonText}>
-                          {checkingWordCorrection
-                            ? "Kontrol ediliyor..."
-                            : savingSetItem
-                              ? "Ekleniyor..."
-                              : "Sete ekle"}
-                        </Text>
-                      </Pressable>
-
-                      {addableWords.length > 0 ? (
-                        <View style={styles.addableSuggestionBlock}>
-                          <Text style={styles.suggestionLabel}>
-                            Library eşleşmeleri
-                          </Text>
-
-                          <View style={styles.addableList}>
-                            {addableWords.map((word) => (
-                              <Pressable
-                                key={word.id}
-                                style={[
-                                  styles.addableWordRow,
-                                  savingSetItem && styles.disabledButton,
-                                ]}
-                                onPress={() => addExistingWordToSet(word.id)}
-                                disabled={savingSetItem}
-                              >
-                                <Text style={styles.addableWordText}>
-                                  + {getDisplayWord(word)}
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
+          {filteredSets.map((set, index) =>
+            renderSetCard(set, showAllWordsSet ? index + 1 : index)
+          )}
         </View>
       )}
     </ScrollView>
   );
+
+  function renderSetCard(
+    set: WordSet,
+    index: number,
+    options: { isVirtual?: boolean } = {}
+  ) {
+    const { isVirtual = false } = options;
+    const stats = getSetStats(set.id);
+    const isEditing = !isVirtual && editingSetId === set.id;
+    const isExpanded = expandedSetId === set.id;
+    const savingThisSet = savingRenameId === set.id;
+    const deletingThisSet = deletingSetId === set.id;
+    const progress = getSetProgress(stats.total, stats.learned);
+    const progressWidth = `${progress}%` as `${number}%`;
+    const isCompleted = stats.total > 0 && stats.learned === stats.total;
+    const accent = getSetAccent(index);
+    const setWords = isExpanded ? getWordsForSet(set.id) : [];
+
+    return (
+      <View key={set.id} style={styles.setCard}>
+        <Pressable
+          style={styles.setCardHeader}
+          onPress={() => toggleSetDetails(set)}
+        >
+          <View style={[styles.setIcon, accent.iconStyle]}>
+            <Text style={styles.setIconText}>
+              {isVirtual ? "📚" : getSetIcon(set.name, index)}
+            </Text>
+          </View>
+
+          <View style={styles.setMain}>
+            <View style={styles.setTitleRow}>
+              <Text style={styles.setTitle} numberOfLines={2}>
+                {set.name}
+              </Text>
+
+              {isVirtual ? (
+                <View style={styles.defaultBadge}>
+                  <Text style={styles.defaultBadgeText}>Varsayılan</Text>
+                </View>
+              ) : isCompleted ? (
+                <View style={styles.completedBadge}>
+                  <Text style={styles.completedBadgeText}>Tamamlandı</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <Text style={styles.setMeta}>
+              {isVirtual
+                ? `${stats.total} kelime • set oluşturmadan eklenenler`
+                : `${stats.total} kelime`}
+            </Text>
+
+            <View style={styles.progressRow}>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    accent.progressStyle,
+                    { width: progressWidth },
+                  ]}
+                />
+              </View>
+
+              <Text style={styles.progressText}>{progress}%</Text>
+            </View>
+          </View>
+        </Pressable>
+
+        {isExpanded ? (
+          <View style={styles.expandedBox}>
+            {!isVirtual ? (
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() => startEditingSet(set)}
+                >
+                  <Text style={styles.secondaryButtonText}>Adı düzenle</Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.dangerButton, deletingThisSet && styles.disabledButton]}
+                  onPress={() => confirmDeleteSet(set)}
+                  disabled={deletingThisSet}
+                >
+                  <Text style={styles.dangerButtonText}>
+                    {deletingThisSet ? "Siliniyor..." : "Sil"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={styles.virtualSetHint}>
+                Burada tüm kelimelerin görünür. İstersen + ile özel set
+                oluşturup kelimeleri gruplayabilirsin.
+              </Text>
+            )}
+
+            {isEditing ? (
+              <View style={styles.editBox}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Set adı"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={editingSetName}
+                  onChangeText={setEditingSetName}
+                  editable={!savingThisSet && !deletingThisSet}
+                  onSubmitEditing={() => saveSetName(set)}
+                />
+
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={[
+                      styles.primaryButton,
+                      (savingThisSet || deletingThisSet) && styles.disabledButton,
+                    ]}
+                    onPress={() => saveSetName(set)}
+                    disabled={savingThisSet || deletingThisSet}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {savingThisSet ? "Kaydediliyor..." : "Kaydet"}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={cancelEditingSet}
+                    disabled={savingThisSet || deletingThisSet}
+                  >
+                    <Text style={styles.secondaryButtonText}>Vazgeç</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            <Text style={styles.contentsTitle}>Set içeriği</Text>
+
+            {setWords.length === 0 ? (
+              <View style={styles.emptyMiniState}>
+                <Text style={styles.emptyMiniTitle}>Henüz kelime yok</Text>
+                <Text style={styles.emptyMiniText}>
+                  {isVirtual
+                    ? "Bugün ekranından veya aşağıdan kelime ekleyebilirsin."
+                    : "Aşağıdan kelime ekleyebilirsin."}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.wordList}>
+                {setWords.map((word) => (
+                  <View key={word.id} style={styles.wordRow}>
+                    <Pressable
+                      style={styles.wordInfo}
+                      onPress={() => openWordDetail(word)}
+                    >
+                      <Text style={styles.wordText}>{getDisplayWord(word)}</Text>
+                      <Text style={styles.wordMeta}>
+                        {word.status ?? "yeni"} •{" "}
+                        {word.ai_content_disabled
+                          ? "AI kapalı"
+                          : hasAiContent(word)
+                            ? "AI hazır"
+                            : "AI bekliyor"}
+                      </Text>
+                    </Pressable>
+
+                    {!isVirtual ? (
+                      <Pressable
+                        style={[
+                          styles.removeWordButton,
+                          savingSetItem && styles.disabledButton,
+                        ]}
+                        onPress={() => confirmRemoveWordFromSet(word)}
+                        disabled={savingSetItem}
+                      >
+                        <Text style={styles.removeWordButtonText}>Çıkar</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.addWordsBox}>
+              <Text style={styles.contentsTitle}>
+                {isVirtual ? "Yeni kelime ekle" : "Bu sete kelime ekle"}
+              </Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Örn: usually"
+                placeholderTextColor={theme.colors.textMuted}
+                autoCapitalize="none"
+                value={addWordSearch}
+                onChangeText={setAddWordSearch}
+                editable={!savingSetItem && !checkingWordCorrection}
+                onSubmitEditing={handleAddWordToExpandedSet}
+              />
+
+              <Pressable
+                style={[
+                  styles.primaryButton,
+                  (savingSetItem || checkingWordCorrection) && styles.disabledButton,
+                ]}
+                onPress={handleAddWordToExpandedSet}
+                disabled={savingSetItem || checkingWordCorrection}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {checkingWordCorrection
+                    ? "Kontrol ediliyor..."
+                    : savingSetItem
+                      ? "Ekleniyor..."
+                      : isVirtual
+                        ? "Kelime ekle"
+                        : "Sete ekle"}
+                </Text>
+              </Pressable>
+
+              {!isVirtual && addableWords.length > 0 ? (
+                <View style={styles.addableSuggestionBlock}>
+                  <Text style={styles.suggestionLabel}>Library eşleşmeleri</Text>
+
+                  <View style={styles.addableList}>
+                    {addableWords.map((word) => (
+                      <Pressable
+                        key={word.id}
+                        style={[
+                          styles.addableWordRow,
+                          savingSetItem && styles.disabledButton,
+                        ]}
+                        onPress={() => addExistingWordToSet(word.id)}
+                        disabled={savingSetItem}
+                      >
+                        <Text style={styles.addableWordText}>
+                          + {getDisplayWord(word)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 }
 
 function getContent(item: UserWord) {
@@ -1141,6 +1216,24 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     color: theme.colors.successDark,
+  },
+  defaultBadge: {
+    borderRadius: 7,
+    backgroundColor: theme.colors.primarySurface,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: theme.colors.primaryDark,
+  },
+  virtualSetHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    color: theme.colors.textMuted,
+    marginBottom: 12,
   },
   progressRow: {
     flexDirection: "row",
