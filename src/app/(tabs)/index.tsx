@@ -49,6 +49,14 @@ type WordSetItem = {
   user_word_id: string;
 };
 
+type WordCorrectionSuggestion = {
+  original_word: string;
+  should_confirm: boolean;
+  primary_suggestion: string;
+  alternatives: string[];
+  reason_tr: string;
+};
+
 const COMMON_WORD_SUGGESTIONS = [
   "usually",
   "usual",
@@ -114,8 +122,13 @@ export default function HomeScreen() {
   const [setsLoading, setSetsLoading] = useState(false);
   const [addingWord, setAddingWord] = useState(false);
   const [addingWordWithAi, setAddingWordWithAi] = useState(false);
+  const [checkingWordCorrection, setCheckingWordCorrection] = useState(false);
 
   const [word, setWord] = useState("");
+  const [pendingCorrection, setPendingCorrection] =
+    useState<WordCorrectionSuggestion | null>(null);
+  const [pendingGenerateAiAfterAdd, setPendingGenerateAiAfterAdd] =
+    useState(false);
 
   const [words, setWords] = useState<UserWord[]>([]);
   const [sets, setSets] = useState<WordSet[]>([]);
@@ -339,7 +352,63 @@ export default function HomeScreen() {
     const cleanWord = word.trim();
 
     if (!cleanWord) {
-      Alert.alert("Missing word", "Please enter a word first.");
+      Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
+      return;
+    }
+
+    setPendingCorrection(null);
+    setPendingGenerateAiAfterAdd(generateAiAfterAdd);
+    setCheckingWordCorrection(true);
+
+    const { data, error } = await supabase.functions.invoke(
+      "suggest-word-correction",
+      {
+        body: {
+          input_word: cleanWord,
+        },
+      }
+    );
+
+    setCheckingWordCorrection(false);
+
+    if (error) {
+      await addConfirmedWord(cleanWord, generateAiAfterAdd);
+      return;
+    }
+
+    const suggestion = data as WordCorrectionSuggestion | null;
+    const correctionOptions = suggestion
+      ? getCorrectionOptions(suggestion, cleanWord)
+      : [];
+
+    if (suggestion?.should_confirm && correctionOptions.length > 0) {
+      setPendingCorrection(suggestion);
+      return;
+    }
+
+    await addConfirmedWord(
+      suggestion?.primary_suggestion?.trim() || cleanWord,
+      generateAiAfterAdd
+    );
+  }
+
+  async function confirmCorrectionSelection(selectedWord: string) {
+    const cleanWord = selectedWord.trim();
+
+    if (!cleanWord) return;
+
+    const generateAiAfterAdd = pendingGenerateAiAfterAdd;
+
+    setPendingCorrection(null);
+    setPendingGenerateAiAfterAdd(false);
+    setWord(cleanWord);
+
+    await addConfirmedWord(cleanWord, generateAiAfterAdd);
+  }
+
+  async function addConfirmedWord(cleanWord: string, generateAiAfterAdd = false) {
+    if (!cleanWord) {
+      Alert.alert("Kelime eksik", "Lütfen önce bir kelime yaz.");
       return;
     }
 
@@ -356,7 +425,8 @@ export default function HomeScreen() {
     if (error) {
       setAddingWord(false);
       setAddingWordWithAi(false);
-      Alert.alert("Could not add word", error.message);
+      setPendingGenerateAiAfterAdd(false);
+      Alert.alert("Kelime eklenemedi", error.message);
       return;
     }
 
@@ -365,9 +435,10 @@ export default function HomeScreen() {
     if (!targetWord) {
       setAddingWord(false);
       setAddingWordWithAi(false);
+      setPendingGenerateAiAfterAdd(false);
       Alert.alert(
-        "Word added",
-        "The word was added to your Library, but I could not find it for the next step."
+        "Kelime eklendi",
+        "Kelime Library'ye eklendi ama sonraki adım için bulunamadı."
       );
       await refreshAll();
       return;
@@ -384,7 +455,8 @@ export default function HomeScreen() {
       if (setError && setError.code !== "23505") {
         setAddingWord(false);
         setAddingWordWithAi(false);
-        Alert.alert("Word added, but could not add it to set", setError.message);
+        setPendingGenerateAiAfterAdd(false);
+        Alert.alert("Kelime eklendi ama sete eklenemedi", setError.message);
         return;
       }
     }
@@ -402,8 +474,9 @@ export default function HomeScreen() {
       if (aiError) {
         setAddingWord(false);
         setAddingWordWithAi(false);
+        setPendingGenerateAiAfterAdd(false);
         Alert.alert(
-          "Word added, but AI failed",
+          "Kelime eklendi ama AI başarısız oldu",
           await getFunctionErrorMessage(aiError)
         );
         await refreshAll();
@@ -413,8 +486,30 @@ export default function HomeScreen() {
 
     setAddingWord(false);
     setAddingWordWithAi(false);
+    setPendingGenerateAiAfterAdd(false);
     setWord("");
     await refreshAll();
+  }
+
+  function getCorrectionOptions(
+    suggestion: WordCorrectionSuggestion,
+    originalWord: string
+  ) {
+    const normalizedOriginal = originalWord.trim().toLowerCase();
+    const options = [
+      suggestion.primary_suggestion,
+      ...suggestion.alternatives,
+    ];
+
+    return Array.from(
+      new Map(
+        options
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
+          .filter((item) => item.toLowerCase() !== normalizedOriginal)
+          .map((item) => [item.toLowerCase(), item])
+      ).values()
+    ).slice(0, 3);
   }
 
   async function getFunctionErrorMessage(error: unknown) {
@@ -616,7 +711,8 @@ export default function HomeScreen() {
           ? `No scheduled review in ${practiceScopeLabel} right now.`
           : `Practice today’s review words in ${practiceScopeLabel}.`;
 
-  const wordActionLoading = addingWord || addingWordWithAi;
+  const wordActionLoading =
+    addingWord || addingWordWithAi || checkingWordCorrection;
 
   const wordSuggestions = useMemo(() => {
     const cleanInput = word.trim().toLowerCase();
@@ -1109,13 +1205,16 @@ export default function HomeScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             value={word}
-            onChangeText={setWord}
+            onChangeText={(value) => {
+              setWord(value);
+              setPendingCorrection(null);
+            }}
             editable={!wordActionLoading}
             onSubmitEditing={() => handleAddWord(false)}
             returnKeyType="done"
           />
 
-          {wordSuggestions.length > 0 ? (
+          {wordSuggestions.length > 0 && !pendingCorrection ? (
             <View style={styles.todaySuggestionsWrap}>
               {wordSuggestions.map((suggestion) => (
                 <Pressable
@@ -1129,6 +1228,44 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
+          {pendingCorrection ? (
+            <View style={styles.todayCorrectionCard}>
+              <Text style={styles.todayCorrectionTitle}>
+                Bunu mu demek istedin?
+              </Text>
+              <Text style={styles.todayCorrectionText}>
+                {pendingCorrection.reason_tr}
+              </Text>
+
+              <View style={styles.todayCorrectionOptions}>
+                {getCorrectionOptions(pendingCorrection, word).map((option) => (
+                  <Pressable
+                    key={option}
+                    style={styles.todayCorrectionChip}
+                    onPress={() => confirmCorrectionSelection(option)}
+                    disabled={wordActionLoading}
+                  >
+                    <Text style={styles.todayCorrectionChipText}>{option}</Text>
+                  </Pressable>
+                ))}
+
+                <Pressable
+                  style={styles.todayCorrectionOriginalChip}
+                  onPress={() =>
+                    confirmCorrectionSelection(
+                      pendingCorrection.original_word || word
+                    )
+                  }
+                  disabled={wordActionLoading}
+                >
+                  <Text style={styles.todayCorrectionOriginalText}>
+                    Yazdığım gibi ekle
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.todayQuickAddActions}>
             <Pressable
               style={[
@@ -1139,7 +1276,11 @@ export default function HomeScreen() {
               disabled={wordActionLoading}
             >
               <Text style={styles.todayQuickAddPrimaryText}>
-                {addingWordWithAi ? "AI hazırlanıyor..." : "Ekle + AI Oluştur"}
+                {checkingWordCorrection
+                  ? "Kontrol ediliyor..."
+                  : addingWordWithAi
+                    ? "AI hazırlanıyor..."
+                    : "Ekle + AI Oluştur"}
               </Text>
             </Pressable>
 
@@ -1152,7 +1293,11 @@ export default function HomeScreen() {
               disabled={wordActionLoading}
             >
               <Text style={styles.todayQuickAddSecondaryText}>
-                {addingWord ? "Ekleniyor..." : "Sadece Ekle"}
+                {checkingWordCorrection
+                  ? "Kontrol..."
+                  : addingWord
+                    ? "Ekleniyor..."
+                    : "Sadece Ekle"}
               </Text>
             </Pressable>
           </View>
@@ -2489,4 +2634,53 @@ const styles = StyleSheet.create({
     fontSize: 30,
     color: "#94a3b8",
   },
+  todayCorrectionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.primarySurface,
+    padding: 13,
+    marginBottom: 14,
+  },
+  todayCorrectionTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  todayCorrectionText: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: theme.colors.textMuted,
+    marginBottom: 10,
+  },
+  todayCorrectionOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  todayCorrectionChip: {
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  todayCorrectionChipText: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: theme.colors.textInverse,
+  },
+  todayCorrectionOriginalChip: {
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  todayCorrectionOriginalText: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: theme.colors.textMuted,
+  },
+
 });
